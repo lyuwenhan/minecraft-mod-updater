@@ -179,7 +179,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y binutils fakeroot
+          sudo apt-get install -y binutils fakeroot rpm
 
       - name: Install dependencies
         run: npm ci
@@ -200,6 +200,13 @@ jobs:
         with:
           name: minecraft-mod-updater-windows-portable
           path: dist-electron/*Portable*.exe
+
+      - name: Upload Windows ZIP
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: minecraft-mod-updater-windows-zip
+          path: dist-electron/*.zip
 
       - name: Upload macOS DMG
         if: runner.os == 'macOS'
@@ -228,6 +235,20 @@ jobs:
         with:
           name: minecraft-mod-updater-linux-deb
           path: dist-electron/*.deb
+
+      - name: Upload Linux rpm
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: minecraft-mod-updater-linux-rpm
+          path: dist-electron/*.rpm
+
+      - name: Upload Linux tar.gz
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: minecraft-mod-updater-linux-tar-gz
+          path: dist-electron/*.tar.gz
 
   release:
     runs-on: ubuntu-latest
@@ -262,18 +283,26 @@ jobs:
 
           mkdir release-out
 
-          WIN_NSIS=$(find artifacts/minecraft-mod-updater-windows-nsis -type f -name '*.exe' | head -1)
-          WIN_PORTABLE=$(find artifacts/minecraft-mod-updater-windows-portable -type f -name '*.exe' | head -1)
-          MAC_DMG=$(find artifacts/minecraft-mod-updater-macos-dmg -type f -name '*.dmg' | head -1)
-          MAC_ZIP=$(find artifacts/minecraft-mod-updater-macos-zip -type f -name '*.zip' | head -1)
-          LINUX_APPIMAGE=$(find artifacts/minecraft-mod-updater-linux-appimage -type f -name '*.AppImage' | head -1)
-          LINUX_DEB=$(find artifacts/minecraft-mod-updater-linux-deb -type f -name '*.deb' | head -1)
+          WIN_NSIS=$(find artifacts/minecraft-mod-updater-windows-nsis -type f -name '*.exe' -print -quit)
+          WIN_PORTABLE=$(find artifacts/minecraft-mod-updater-windows-portable -type f -name '*.exe' -print -quit)
+          WIN_ZIP=$(find artifacts/minecraft-mod-updater-windows-zip -type f -name '*.zip' -print -quit)
+
+          MAC_DMG=$(find artifacts/minecraft-mod-updater-macos-dmg -type f -name '*.dmg' -print -quit)
+          MAC_ZIP=$(find artifacts/minecraft-mod-updater-macos-zip -type f -name '*.zip' -print -quit)
+
+          LINUX_APPIMAGE=$(find artifacts/minecraft-mod-updater-linux-appimage -type f -name '*.AppImage' -print -quit)
+          LINUX_DEB=$(find artifacts/minecraft-mod-updater-linux-deb -type f -name '*.deb' -print -quit)
+          LINUX_RPM=$(find artifacts/minecraft-mod-updater-linux-rpm -type f -name '*.rpm' -print -quit)
+          LINUX_TAR_GZ=$(find artifacts/minecraft-mod-updater-linux-tar-gz -type f -name '*.tar.gz' -print -quit)
 
           cp "$WIN_NSIS" \
             release-out/minecraft-mod-updater-windows-install.exe
 
           cp "$WIN_PORTABLE" \
             release-out/minecraft-mod-updater-windows-portable.exe
+
+          cp "$WIN_ZIP" \
+            release-out/minecraft-mod-updater-windows-portable.zip
 
           cp "$MAC_DMG" \
             release-out/minecraft-mod-updater-macos-install.dmg
@@ -286,6 +315,12 @@ jobs:
 
           cp "$LINUX_DEB" \
             release-out/minecraft-mod-updater-linux-install.deb
+
+          cp "$LINUX_RPM" \
+            release-out/minecraft-mod-updater-linux-install.rpm
+
+          cp "$LINUX_TAR_GZ" \
+            release-out/minecraft-mod-updater-linux-portable.tar.gz
 
           ls -la release-out
 

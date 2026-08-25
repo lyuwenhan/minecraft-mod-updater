@@ -1,6 +1,6 @@
 {
 	"name": "minecraft-mod-updater",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Find and download compatible Minecraft mod versions for your target game version and mod loader.",
 	"type": "commonjs",
 	"main": "electron-main.js",
@@ -27,7 +27,8 @@
 			"icon": "icons/icon.ico",
 			"target": [
 				"nsis",
-				"portable"
+				"portable",
+				"zip"
 			]
 		},
 		"linux": {
@@ -35,7 +36,9 @@
 			"icon": "icons/512x512.png",
 			"target": [
 				"AppImage",
-				"deb"
+				"deb",
+				"rpm",
+				"tar.gz"
 			],
 			"category": "Utility",
 			"synopsis": "Update Minecraft mods for a target game version and mod loader",
