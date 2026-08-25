@@ -3,7 +3,8 @@ const {
 	BrowserWindow,
 	dialog,
 	ipcMain,
-	shell
+	shell,
+	Menu
 } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs/promises");
@@ -44,12 +45,19 @@ function createWindow() {
 		height: 760,
 		minWidth: 860,
 		minHeight: 600,
+		autoHideMenuBar: true,
 		webPreferences: {
 			preload: path.join(__dirname, "preload.js"),
 			contextIsolation: true,
 			nodeIntegration: false,
-			sandbox: true
+			sandbox: true,
+			devTools: false
 		}
+	});
+	win.webContents.setZoomFactor(1);
+	win.webContents.setVisualZoomLevelLimits(1, 1);
+	win.webContents.on("will-navigate", event => {
+		event.preventDefault()
 	});
 	win.loadFile("index.html")
 }
@@ -217,6 +225,7 @@ async function downloadFile(download, directory) {
 	await fs.writeFile(targetPath, Buffer.from(await response.arrayBuffer()))
 }
 app.whenReady().then(() => {
+	Menu.setApplicationMenu(null);
 	ipcMain.handle("files:select", async () => {
 		const settings = await readSettings();
 		const defaultPath = await getExistingDirectory(settings.lastImportDirectory);
