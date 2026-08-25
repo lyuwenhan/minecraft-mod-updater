@@ -1,0 +1,86 @@
+{
+	"name": "minecraft-mod-updater",
+	"version": "1.0.0",
+	"description": "Find and download compatible Minecraft mod versions for your target game version and mod loader.",
+	"type": "commonjs",
+	"main": "electron-main.js",
+	"desktopName": "com.lyuwenhan.minecraftmodupdater",
+	"scripts": {
+		"electron": "electron .",
+		"dist": "electron-builder --publish never"
+	},
+	"build": {
+		"appId": "com.lyuwenhan.minecraftmodupdater",
+		"productName": "Minecraft Mod Updater",
+		"directories": {
+			"output": "dist-electron"
+		},
+		"files": [
+			"index.html",
+			"lib/**/*",
+			"icons/**/*",
+			"electron-main.js",
+			"preload.js",
+			"package.json"
+		],
+		"win": {
+			"icon": "icons/icon.ico",
+			"target": [
+				"nsis",
+				"portable"
+			]
+		},
+		"linux": {
+			"executableName": "minecraftmodupdater",
+			"icon": "icons/512x512.png",
+			"target": [
+				"AppImage",
+				"deb"
+			],
+			"category": "Utility",
+			"synopsis": "Update Minecraft mods for a target game version and mod loader",
+			"maintainer": "lyuwenhan <81000228+lyuwenhan@users.noreply.github.com>",
+			"desktop": {
+				"entry": {
+					"Name": "Minecraft Mod Updater",
+					"Comment": "Update Minecraft mods for a target game version and mod loader",
+					"Keywords": "minecraft;mod;",
+					"Categories": "Utility;",
+					"StartupWMClass": "com.lyuwenhan.minecraftmodupdater"
+				}
+			}
+		},
+		"mac": {
+			"icon": "icons/icon.icns",
+			"target": [
+				"dmg",
+				"zip"
+			],
+			"category": "public.app-category.utilities"
+		},
+		"nsis": {
+			"oneClick": false,
+			"allowToChangeInstallationDirectory": true,
+			"installerIcon": "icons/icon.ico",
+			"uninstallerIcon": "icons/icon.ico"
+		},
+		"portable": {
+			"artifactName": "${productName}-Portable-${version}.${ext}"
+		},
+		"deb": {
+			"packageName": "minecraft-mod-updater"
+		}
+	},
+	"author": {
+		"name": "lyuwenhan",
+		"email": "81000228+lyuwenhan@users.noreply.github.com"
+	},
+	"bugs": {
+		"url": "https://github.com/lyuwenhan/minecraft-mod-updater/issues"
+	},
+	"homepage": "https://github.com/lyuwenhan/minecraft-mod-updater#readme",
+	"devDependencies": {
+		"electron": "^44.0.0",
+		"electron-builder": "^26.15.3"
+	}
+}
