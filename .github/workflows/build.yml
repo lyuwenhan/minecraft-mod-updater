@@ -1,0 +1,338 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read status.json
+        id: check
+        run: node scripts/ci-read-gate.mjs
+
+  reset-no-release:
+    runs-on: ubuntu-latest
+    needs: [gate]
+    if: needs.gate.result == 'success' && needs.gate.outputs.should_release != 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reset status.json
+        run: node scripts/ci-reset-status.mjs
+
+      - name: Commit and push status.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add status.json
+
+          if git diff --staged --quiet; then
+            echo "status.json unchanged."
+            exit 0
+          fi
+
+          git commit -m "chore: reset status.json"
+          git push
+
+  icons:
+    runs-on: ubuntu-latest
+    needs: [gate]
+    if: needs.gate.outputs.should_release == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup ImageMagick
+        uses: mfinelli/setup-imagemagick@v7
+        with:
+          cache: true
+          install-libfuse2: true
+
+      - name: Generate PNG icons from lib/favicon.png
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p icons
+
+          for SIZE in 16 24 32 48 64 128 256 512 1024; do
+            magick lib/favicon.png \
+              -resize "${SIZE}x${SIZE}" \
+              "icons/${SIZE}x${SIZE}.png"
+          done
+
+      - name: Generate icon.ico
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          magick \
+            icons/16x16.png \
+            icons/24x24.png \
+            icons/32x32.png \
+            icons/48x48.png \
+            icons/64x64.png \
+            icons/128x128.png \
+            icons/256x256.png \
+            icons/icon.ico
+
+      - name: Upload generated icons
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-icons
+          path: icons/
+
+  mac-icon:
+    runs-on: macos-latest
+    needs: [icons]
+
+    steps:
+      - name: Download generated icons
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-icons
+          path: icons
+
+      - name: Generate icon.icns
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir icon.iconset
+
+          cp icons/16x16.png icon.iconset/icon_16x16.png
+          cp icons/32x32.png icon.iconset/icon_16x16@2x.png
+
+          cp icons/32x32.png icon.iconset/icon_32x32.png
+          cp icons/64x64.png icon.iconset/icon_32x32@2x.png
+
+          cp icons/128x128.png icon.iconset/icon_128x128.png
+          cp icons/256x256.png icon.iconset/icon_128x128@2x.png
+
+          cp icons/256x256.png icon.iconset/icon_256x256.png
+          cp icons/512x512.png icon.iconset/icon_256x256@2x.png
+
+          cp icons/512x512.png icon.iconset/icon_512x512.png
+          cp icons/1024x1024.png icon.iconset/icon_512x512@2x.png
+
+          iconutil -c icns icon.iconset -o icons/icon.icns
+
+      - name: Upload complete icons
+        uses: actions/upload-artifact@v4
+        with:
+          name: complete-icons
+          path: icons/
+
+  electron-pack:
+    needs: [mac-icon]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download icons
+        uses: actions/download-artifact@v4
+        with:
+          name: complete-icons
+          path: icons
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binutils fakeroot
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron application
+        run: npm run dist
+
+      - name: Upload Windows NSIS installer
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: minecraft-mod-updater-windows-nsis
+          path: dist-electron/*Setup*.exe
+
+      - name: Upload Windows portable
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: minecraft-mod-updater-windows-portable
+          path: dist-electron/*Portable*.exe
+
+      - name: Upload macOS DMG
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: minecraft-mod-updater-macos-dmg
+          path: dist-electron/*.dmg
+
+      - name: Upload macOS ZIP
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: minecraft-mod-updater-macos-zip
+          path: dist-electron/*.zip
+
+      - name: Upload Linux AppImage
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: minecraft-mod-updater-linux-appimage
+          path: dist-electron/*.AppImage
+
+      - name: Upload Linux deb
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: minecraft-mod-updater-linux-deb
+          path: dist-electron/*.deb
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [gate, icons, mac-icon, electron-pack]
+
+    if: >-
+      needs.gate.outputs.should_release == 'true' &&
+      needs.icons.result == 'success' &&
+      needs.mac-icon.result == 'success' &&
+      needs.electron-pack.result == 'success'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read package version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: minecraft-mod-updater-*
+          path: artifacts
+
+      - name: Stage release files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir release-out
+
+          WIN_NSIS=$(find artifacts/minecraft-mod-updater-windows-nsis -type f -name '*.exe' | head -1)
+          WIN_PORTABLE=$(find artifacts/minecraft-mod-updater-windows-portable -type f -name '*.exe' | head -1)
+          MAC_DMG=$(find artifacts/minecraft-mod-updater-macos-dmg -type f -name '*.dmg' | head -1)
+          MAC_ZIP=$(find artifacts/minecraft-mod-updater-macos-zip -type f -name '*.zip' | head -1)
+          LINUX_APPIMAGE=$(find artifacts/minecraft-mod-updater-linux-appimage -type f -name '*.AppImage' | head -1)
+          LINUX_DEB=$(find artifacts/minecraft-mod-updater-linux-deb -type f -name '*.deb' | head -1)
+
+          cp "$WIN_NSIS" \
+            release-out/minecraft-mod-updater-windows-install.exe
+
+          cp "$WIN_PORTABLE" \
+            release-out/minecraft-mod-updater-windows-portable.exe
+
+          cp "$MAC_DMG" \
+            release-out/minecraft-mod-updater-macos-install.dmg
+
+          cp "$MAC_ZIP" \
+            release-out/minecraft-mod-updater-macos-portable.zip
+
+          cp "$LINUX_APPIMAGE" \
+            release-out/minecraft-mod-updater-linux-portable.AppImage
+
+          cp "$LINUX_DEB" \
+            release-out/minecraft-mod-updater-linux-install.deb
+
+          ls -la release-out
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Minecraft Mod Updater v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          overwrite_files: true
+          files: release-out/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  reset-status:
+    runs-on: ubuntu-latest
+    needs: [release]
+
+    # 只有 release 成功才执行。
+    # build/release 因错误失败时，status.json 保持 true。
+    if: needs.release.result == 'success'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync latest main
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
+
+      - name: Reset status.json
+        run: node scripts/ci-reset-status.mjs
+
+      - name: Commit and push status.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add status.json
+
+          if git diff --staged --quiet; then
+            echo "status.json unchanged."
+            exit 0
+          fi
+
+          git commit -m "chore: reset status.json"
+          git push
