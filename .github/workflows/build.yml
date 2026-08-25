@@ -307,31 +307,31 @@ jobs:
           LINUX_TAR_GZ=$(find artifacts/minecraft-mod-updater-linux-tar-gz -type f -name '*.tar.gz' -print -quit)
 
           cp "$WIN_NSIS" \
-            release-out/minecraft-mod-updater-windows-install.exe
+            release-out/minecraft-mod-updater-windows-install-v${{ steps.version.outputs.version }}.exe
 
           cp "$WIN_PORTABLE" \
-            release-out/minecraft-mod-updater-windows-portable.exe
+            release-out/minecraft-mod-updater-windows-portable-v${{ steps.version.outputs.version }}.exe
 
           cp "$WIN_ZIP" \
-            release-out/minecraft-mod-updater-windows-portable.zip
+            release-out/minecraft-mod-updater-windows-portable-v${{ steps.version.outputs.version }}.zip
 
           cp "$MAC_DMG" \
-            release-out/minecraft-mod-updater-macos-install.dmg
+            release-out/minecraft-mod-updater-macos-install-v${{ steps.version.outputs.version }}.dmg
 
           cp "$MAC_ZIP" \
-            release-out/minecraft-mod-updater-macos-portable.zip
+            release-out/minecraft-mod-updater-macos-portable-v${{ steps.version.outputs.version }}.zip
 
           cp "$LINUX_APPIMAGE" \
-            release-out/minecraft-mod-updater-linux-portable.AppImage
+            release-out/minecraft-mod-updater-linux-portable-v${{ steps.version.outputs.version }}.AppImage
 
           cp "$LINUX_DEB" \
-            release-out/minecraft-mod-updater-linux-install.deb
+            release-out/minecraft-mod-updater-linux-install-v${{ steps.version.outputs.version }}.deb
 
           cp "$LINUX_RPM" \
-            release-out/minecraft-mod-updater-linux-install.rpm
+            release-out/minecraft-mod-updater-linux-install-v${{ steps.version.outputs.version }}.rpm
 
           cp "$LINUX_TAR_GZ" \
-            release-out/minecraft-mod-updater-linux-portable.tar.gz
+            release-out/minecraft-mod-updater-linux-portable-v${{ steps.version.outputs.version }}.tar.gz
 
           ls -la release-out
 
