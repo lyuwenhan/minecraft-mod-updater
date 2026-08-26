@@ -156,12 +156,18 @@
 		<div class="search-filter panel">
 			<label>Search <input id="search-query" placeholder="Name or JAR name">
 			</label>
-			<label>Filter <select id="content-filter">
-					<option value="all">All files</option>
-					<option value="all-found">Original and target found</option>
-					<option value="original-only">Original found, target not found</option>
-					<option value="not-found">Original not found</option>
-				</select>
+			<label>Filter <span class="select-with-custom">
+					<select id="source-filter">
+						<option value="all">source: all</option>
+						<option value="found">source: Found</option>
+						<option value="not-found">source: Not Found</option>
+					</select>
+					<select id="target-filter">
+						<option value="all">target: all</option>
+						<option value="found">target: Found</option>
+						<option value="not-found">target: Not Found</option>
+					</select>
+				</span>
 			</label>
 		</div>
 		<div id="operation-panel"></div>
