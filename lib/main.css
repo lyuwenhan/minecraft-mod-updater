@@ -170,3 +170,6 @@ button:disabled {
 .file-description {
 	overflow-wrap: anywhere
 }
+body:not(:has(#operation-panel .file-card)) .after-import {
+	display: none
+}
