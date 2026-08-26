@@ -1,4 +1,4 @@
 {
-	"needsUpdate": true,
-	"description": "## Changes\n\n### Download safety\n- Warn before downloading if the selected target folder is not empty. The folder will be cleared before writing new files.\n- Validate download URLs before use.\n- Verify downloaded files with the hash provided by Modrinth.\n- Verify that downloaded files use the `.jar` extension.\n- Rename downloaded files to the `id-gameVersion-loader-version.jar` format, for example `create-1.21.1-forge-6.0.4.jar`.\n\n### Versions and filters\n- Removed the hardcoded Minecraft version list.\n- Game versions are now loaded dynamically from Modrinth.\n- Split filtering into separate `Source` and `Target` controls.\n\n### Cache and error handling\n- HTTP 429 now stops pending fetches and reports that access is too frequent.\n\n### UI and packaging\n- Hide Reload and Search for target version before files are imported."
+	"needsUpdate": false,
+	"description": ""
 }
