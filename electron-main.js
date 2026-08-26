@@ -8,11 +8,22 @@ const {
 } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs/promises");
+const nodeFs = require("node:fs");
+const {
+	Readable,
+	Transform
+} = require("node:stream");
+const {
+	pipeline
+} = require("node:stream/promises");
 const crypto = require("node:crypto");
 const APP_NAME = "Minecraft Mod Updater";
 const MODRINTH_API = "https://api.modrinth.com/v2";
 app.setName(APP_NAME);
 const requestCache = new Map;
+let requestCacheLastOperation = Date.now();
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1e3;
+const MODRINTH_CDN_PREFIX = "https://cdn.modrinth.com/data/";
 const settingsFileName = "settings.json";
 async function readSettings() {
 	try {
@@ -36,6 +47,63 @@ async function getExistingDirectory(directory) {
 	} catch {
 		return undefined
 	}
+}
+
+function todayKey(time = Date.now()) {
+	return new Date(time).toISOString().slice(0, 10)
+}
+
+function clearExpiredRequestCache() {
+	const now = Date.now();
+	if (now - requestCacheLastOperation >= CACHE_MAX_AGE_MS || todayKey(now) !== todayKey(requestCacheLastOperation)) {
+		requestCache.clear()
+	}
+	requestCacheLastOperation = now
+}
+setInterval(clearExpiredRequestCache, CACHE_MAX_AGE_MS);
+class TooManyRequestsError extends Error {
+	constructor() {
+		super("访问过于频繁");
+		this.name = "TooManyRequestsError";
+		this.tooManyRequests = true
+	}
+}
+let activeFetchControllers = new Set;
+let modrinthRequestsBlocked = false;
+
+function abortActiveFetches() {
+	modrinthRequestsBlocked = true;
+	for (const controller of activeFetchControllers) controller.abort();
+	activeFetchControllers.clear()
+}
+
+function resetModrinthRequestBlock() {
+	modrinthRequestsBlocked = false
+}
+
+function getErrorMessage(error) {
+	return error?.tooManyRequests ? "访问过于频繁" : error.message
+}
+
+function isJarPath(filePath) {
+	return path.extname(filePath).toLowerCase() === ".jar"
+}
+
+function resolveJarPath(filePath) {
+	const resolved = path.resolve(filePath);
+	if (!isJarPath(resolved)) throw new Error(`Not a JAR file: ${path.basename(filePath)}`);
+	return resolved
+}
+async function existingJarPaths(paths) {
+	const output = [];
+	for (const filePath of paths) {
+		const resolved = resolveJarPath(filePath);
+		try {
+			const stat = await fs.stat(resolved);
+			if (stat.isFile()) output.push(resolved)
+		} catch {}
+	}
+	return output
 }
 
 function createWindow() {
@@ -71,6 +139,8 @@ async function apiRequest({
 	body,
 	useCache = true
 }) {
+	clearExpiredRequestCache();
+	if (modrinthRequestsBlocked) throw new TooManyRequestsError;
 	const key = cacheKey(method, url, body);
 	if (useCache && requestCache.has(key)) return structuredClone(requestCache.get(key));
 	const headers = {
@@ -78,11 +148,26 @@ async function apiRequest({
 		"User-Agent": "minecraft-mod-updater/1.0.0 (Electron)"
 	};
 	if (body !== undefined) headers["Content-Type"] = "application/json";
-	const response = await fetch(url, {
-		method,
-		headers,
-		body
-	});
+	const controller = new AbortController;
+	activeFetchControllers.add(controller);
+	let response;
+	try {
+		response = await fetch(url, {
+			method,
+			headers,
+			body,
+			signal: controller.signal
+		})
+	} catch (error) {
+		if (modrinthRequestsBlocked || error.name === "AbortError") throw new TooManyRequestsError;
+		throw error
+	} finally {
+		activeFetchControllers.delete(controller)
+	}
+	if (response.status === 429) {
+		abortActiveFetches();
+		throw new TooManyRequestsError
+	}
 	if (response.status === 404) return null;
 	if (!response.ok) {
 		const text = await response.text();
@@ -92,14 +177,29 @@ async function apiRequest({
 	if (useCache) requestCache.set(key, structuredClone(data));
 	return data
 }
+async function getGameVersions() {
+	const versions = await apiRequest({
+		url: `${MODRINTH_API}/tag/game_version`,
+		useCache: true
+	}) || [];
+	return versions.filter(version => version && version.version_type === "release" && typeof version.version === "string" && version.version).sort((left, right) => String(right.date || "").localeCompare(String(left.date || ""))).map(version => version.version)
+}
 async function readJar(filePath) {
-	const data = await fs.readFile(filePath);
-	const stat = await fs.stat(filePath);
+	const resolved = resolveJarPath(filePath);
+	const stat = await fs.stat(resolved);
+	if (!stat.isFile()) throw new Error(`Not a file: ${path.basename(resolved)}`);
+	const hash = crypto.createHash("sha1");
+	await pipeline(nodeFs.createReadStream(resolved), new Transform({
+		transform(chunk, _encoding, callback) {
+			hash.update(chunk);
+			callback()
+		}
+	}));
 	return {
-		path: filePath,
-		fileName: path.basename(filePath),
+		path: resolved,
+		fileName: path.basename(resolved),
 		size: stat.size,
-		sha1: crypto.createHash("sha1").update(data).digest("hex")
+		sha1: hash.digest("hex")
 	}
 }
 async function lookupModrinthBatch(files, useCache) {
@@ -170,6 +270,7 @@ async function enrichFiles(files, useCache) {
 	try {
 		modrinthByHash = await lookupModrinthBatch(files, useCache)
 	} catch (error) {
+		if (error?.tooManyRequests) throw error;
 		modrinthErrors.push(`Modrinth: ${error.message}`)
 	}
 	return files.map(file => ({
@@ -205,8 +306,14 @@ async function findModrinthDownload(item, preferences, useCache) {
 	if (!file) return null;
 	return {
 		provider: "modrinth",
+		projectId,
+		projectSlug: item.modrinth?.project?.slug || projectId,
+		gameVersion: preferences.gameVersion,
+		loader: preferences.loader,
 		fileName: file.filename,
 		url: file.url,
+		sha1: file.hashes?.sha1 || "",
+		sha512: file.hashes?.sha512 || "",
 		versionName: version.version_number || version.name
 	}
 }
@@ -214,18 +321,95 @@ async function findModrinthDownload(item, preferences, useCache) {
 function safeFileName(name) {
 	return path.basename(name).replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
 }
-async function downloadFile(download, directory) {
-	const response = await fetch(download.url, {
-		headers: {
-			"User-Agent": "minecraft-mod-updater/1.0.0 (Electron)"
+
+function safeNamePart(value) {
+	return safeFileName(String(value || "").trim()).replace(/\s+/g, "_")
+}
+
+function plannedDownloadFileName(download) {
+	const project = safeNamePart(download.projectSlug || download.projectId);
+	const gameVersion = safeNamePart(download.gameVersion);
+	const loader = safeNamePart(download.loader);
+	const version = safeNamePart(download.versionName);
+	return `${project}-${gameVersion}-${loader}-${version}.jar`
+}
+
+function validateDownloadMetadata(download) {
+	if (!download?.url || !download.url.startsWith(MODRINTH_CDN_PREFIX) || download.url.includes("..")) {
+		throw new Error("Invalid Modrinth CDN URL")
+	}
+	if (!isJarPath(download.fileName || "")) throw new Error("Downloaded file metadata is not a JAR");
+	if (!isJarPath(plannedDownloadFileName(download))) throw new Error("Planned file name is not a JAR");
+	if (!download.sha1 && !download.sha512) throw new Error("Downloaded file has no hash metadata")
+}
+
+function hashVerifier(download) {
+	const sha1 = download.sha1 ? crypto.createHash("sha1") : null;
+	const sha512 = download.sha512 ? crypto.createHash("sha512") : null;
+	return new Transform({
+		transform(chunk, _encoding, callback) {
+			if (sha1) sha1.update(chunk);
+			if (sha512) sha512.update(chunk);
+			callback(null, chunk)
+		},
+		flush(callback) {
+			if (sha1 && sha1.digest("hex") !== download.sha1) return callback(new Error("SHA-1 hash mismatch"));
+			if (sha512 && sha512.digest("hex") !== download.sha512) return callback(new Error("SHA-512 hash mismatch"));
+			callback()
 		}
-	});
+	})
+}
+async function downloadFile(download, directory) {
+	validateDownloadMetadata(download);
+	const controller = new AbortController;
+	activeFetchControllers.add(controller);
+	let response;
+	try {
+		response = await fetch(download.url, {
+			headers: {
+				"User-Agent": "minecraft-mod-updater/1.0.0 (Electron)"
+			},
+			signal: controller.signal
+		})
+	} catch (error) {
+		if (modrinthRequestsBlocked || error.name === "AbortError") throw new TooManyRequestsError;
+		throw error
+	} finally {
+		activeFetchControllers.delete(controller)
+	}
+	if (response.status === 429) {
+		abortActiveFetches();
+		throw new TooManyRequestsError
+	}
 	if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-	const targetPath = path.join(directory, safeFileName(download.fileName));
-	await fs.writeFile(targetPath, Buffer.from(await response.arrayBuffer()))
+	if (!response.body) throw new Error("Empty download body");
+	const finalPath = path.resolve(directory, plannedDownloadFileName(download));
+	const tempPath = `${finalPath}.download`;
+	try {
+		await pipeline(Readable.fromWeb(response.body), hashVerifier(download), nodeFs.createWriteStream(tempPath, {
+			flags: "wx"
+		}));
+		await fs.rename(tempPath, finalPath)
+	} catch (error) {
+		await fs.rm(tempPath, {
+			force: true
+		});
+		throw error
+	}
+}
+async function clearDirectory(directory) {
+	const entries = await fs.readdir(directory);
+	await Promise.all(entries.map(entry => fs.rm(path.join(directory, entry), {
+		recursive: true,
+		force: true
+	})))
 }
 app.whenReady().then(() => {
 	Menu.setApplicationMenu(null);
+	ipcMain.handle("modrinth:game-versions", async () => {
+		resetModrinthRequestBlock();
+		return getGameVersions()
+	});
 	ipcMain.handle("files:select", async () => {
 		const settings = await readSettings();
 		const defaultPath = await getExistingDirectory(settings.lastImportDirectory);
@@ -240,7 +424,7 @@ app.whenReady().then(() => {
 		if (defaultPath) dialogOptions.defaultPath = defaultPath;
 		const result = await dialog.showOpenDialog(dialogOptions);
 		if (result.canceled) return [];
-		const filePaths = result.filePaths.filter(file => path.extname(file).toLowerCase() === ".jar");
+		const filePaths = await existingJarPaths(result.filePaths);
 		if (filePaths[0]) {
 			await writeSettings({
 				...settings,
@@ -267,14 +451,16 @@ app.whenReady().then(() => {
 		const entries = await fs.readdir(directory, {
 			withFileTypes: true
 		});
-		return entries.filter(entry => entry.isFile() && path.extname(entry.name).toLowerCase() === ".jar").map(entry => path.join(directory, entry.name))
+		return entries.filter(entry => entry.isFile() && path.extname(entry.name).toLowerCase() === ".jar").map(entry => path.resolve(directory, entry.name))
 	});
 	ipcMain.handle("mods:import", async (_event, {
 		paths,
 		knownHashes = [],
 		knownProviderIds = []
 	}) => {
-		const files = uniqueFilesByHash(await Promise.all(paths.map(filePath => readJar(filePath))), knownHashes);
+		resetModrinthRequestBlock();
+		const jarPaths = await existingJarPaths(paths);
+		const files = uniqueFilesByHash(await Promise.all(jarPaths.map(filePath => readJar(filePath))), knownHashes);
 		const enriched = await enrichFiles(files, true);
 		return {
 			items: uniqueFilesByProviderId(enriched, knownProviderIds)
@@ -283,7 +469,9 @@ app.whenReady().then(() => {
 	ipcMain.handle("mods:reload", async (_event, {
 		items
 	}) => {
-		const files = await Promise.all(items.map(item => readJar(item.path)));
+		resetModrinthRequestBlock();
+		const jarPaths = await existingJarPaths(items.map(item => item.path));
+		const files = await Promise.all(jarPaths.map(filePath => readJar(filePath)));
 		return enrichFiles(files, false)
 	});
 	ipcMain.handle("mods:check-downloads", async (_event, {
@@ -291,6 +479,7 @@ app.whenReady().then(() => {
 		preferences,
 		useCache
 	}) => {
+		resetModrinthRequestBlock();
 		const output = [];
 		for (const item of items) {
 			let modrinthDownload = null;
@@ -306,7 +495,8 @@ app.whenReady().then(() => {
 			try {
 				modrinthDownload = await findModrinthDownload(item, preferences, useCache)
 			} catch (error) {
-				modrinthError = error.message
+				if (error?.tooManyRequests) throw error;
+				modrinthDownload = null
 			}
 			output.push({
 				modrinthDownload,
@@ -319,6 +509,7 @@ app.whenReady().then(() => {
 	ipcMain.handle("downloads:choose-and-save", async (_event, {
 		downloads
 	}) => {
+		resetModrinthRequestBlock();
 		const settings = await readSettings();
 		const defaultPath = await getExistingDirectory(settings.lastExportDirectory);
 		const dialogOptions = {
@@ -331,11 +522,28 @@ app.whenReady().then(() => {
 			canceled: true,
 			results: []
 		};
-		const directory = result.filePaths[0];
+		const directory = path.resolve(result.filePaths[0]);
 		await writeSettings({
 			...settings,
 			lastExportDirectory: directory
 		});
+		const existingEntries = await fs.readdir(directory);
+		if (existingEntries.length) {
+			const confirmation = await dialog.showMessageBox({
+				type: "warning",
+				buttons: ["Continue", "Cancel"],
+				defaultId: 1,
+				cancelId: 1,
+				title: "Clear download folder",
+				message: "The selected folder is not empty.",
+				detail: "Continuing will clear the folder before downloading. Continue?"
+			});
+			if (confirmation.response !== 0) return {
+				canceled: true,
+				results: []
+			};
+			await clearDirectory(directory)
+		}
 		const results = [];
 		for (const download of downloads) {
 			try {
@@ -343,7 +551,8 @@ app.whenReady().then(() => {
 				results.push({
 					ok: true
 				})
-			} catch {
+			} catch (error) {
+				if (error?.tooManyRequests) throw error;
 				results.push({
 					ok: false
 				})

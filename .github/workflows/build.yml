@@ -15,6 +15,7 @@ jobs:
 
     outputs:
       should_release: ${{ steps.check.outputs.should_release }}
+      description: ${{ steps.check.outputs.description }}
 
     steps:
       - name: Checkout
@@ -340,6 +341,7 @@ jobs:
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: Minecraft Mod Updater v${{ steps.version.outputs.version }}
+          body: ${{ needs.gate.outputs.description }}
           generate_release_notes: true
           overwrite_files: true
           files: release-out/*
