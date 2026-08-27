@@ -17,6 +17,8 @@ const {
 	pipeline
 } = require("node:stream/promises");
 const crypto = require("node:crypto");
+const XlsxPopulate = require("xlsx-populate");
+const JSZip = require("jszip");
 const APP_NAME = "Minecraft Mod Updater";
 const MODRINTH_API = "https://api.modrinth.com/v2";
 app.setName(APP_NAME);
@@ -145,7 +147,7 @@ async function apiRequest({
 	if (useCache && requestCache.has(key)) return structuredClone(requestCache.get(key));
 	const headers = {
 		Accept: "application/json",
-		"User-Agent": "minecraft-mod-updater/1.0.0 (Electron)"
+		"User-Agent": "minecraft-mod-updater"
 	};
 	if (body !== undefined) headers["Content-Type"] = "application/json";
 	const controller = new AbortController;
@@ -367,7 +369,7 @@ async function downloadFile(download, directory) {
 	try {
 		response = await fetch(download.url, {
 			headers: {
-				"User-Agent": "minecraft-mod-updater/1.0.0 (Electron)"
+				"User-Agent": "minecraft-mod-updater"
 			},
 			signal: controller.signal
 		})
@@ -403,6 +405,134 @@ async function clearDirectory(directory) {
 		recursive: true,
 		force: true
 	})))
+}
+
+function validHttpUrl(value) {
+	try {
+		const url = new URL(value);
+		return ["https:", "http:"].includes(url.protocol) ? url.toString() : ""
+	} catch {
+		return ""
+	}
+}
+
+function applyTableBorders(worksheet, firstRow, lastRow) {
+	for (let row = firstRow; row <= lastRow; row++) {
+		for (let column = 1; column <= 4; column++) {
+			worksheet.cell(row, column).style({
+				border: {
+					top: row === firstRow ? "medium" : "thin",
+					bottom: row === lastRow ? "medium" : "thin",
+					left: column === 1 ? "medium" : "thin",
+					right: column === 4 ? "medium" : "thin"
+				}
+			})
+		}
+	}
+}
+async function addAutoFilterToWorkbook(filePath, filterRange) {
+	const workbookBuffer = await fs.readFile(filePath);
+	const zip = await JSZip.loadAsync(workbookBuffer);
+	const worksheetPath = "xl/worksheets/sheet1.xml";
+	const worksheetFile = zip.file(worksheetPath);
+	if (!worksheetFile) throw new Error("Summary worksheet XML not found");
+	let worksheetXml = await worksheetFile.async("string");
+	worksheetXml = worksheetXml.replace(/<autoFilter\b[^>]*\/>/g, "").replace(/<autoFilter\b[\s\S]*?<\/autoFilter>/g, "");
+	if (!worksheetXml.includes("</sheetData>")) {
+		throw new Error("Summary worksheet data XML not found")
+	}
+	worksheetXml = worksheetXml.replace("</sheetData>", `</sheetData><autoFilter ref="${filterRange}"/>`);
+	zip.file(worksheetPath, worksheetXml);
+	const output = await zip.generateAsync({
+		type: "nodebuffer",
+		compression: "DEFLATE"
+	});
+	await fs.writeFile(filePath, output)
+}
+
+function capitalizeFirst(value) {
+	const text = String(value || "");
+	return text ? text.charAt(0).toLocaleUpperCase() + text.slice(1) : ""
+}
+async function exportSummaryWorkbook({
+	targetVersion,
+	targetLoader,
+	items
+}) {
+	if (!Array.isArray(items) || !items.length) throw new Error("No files imported");
+	const result = await dialog.showSaveDialog({
+		title: "Export summary",
+		defaultPath: "minecraft-mod-updater-summary.xlsx",
+		filters: [{
+			name: "Excel Workbook",
+			extensions: ["xlsx"]
+		}]
+	});
+	if (result.canceled || !result.filePath) return {
+		canceled: true
+	};
+	const workbook = await XlsxPopulate.fromBlankAsync();
+	const worksheet = workbook.sheet(0);
+	worksheet.name("Summary");
+	worksheet.range("A1:D1").merged(true);
+	worksheet.cell("A1").value("Statistics");
+	worksheet.range("A2:D2").value([
+		["Target Version", "Target Loader", "Source Found", "Target Found"]
+	]);
+	worksheet.cell("A3").value(String(targetVersion || ""));
+	worksheet.cell("B3").value(capitalizeFirst(targetLoader));
+	worksheet.range("A5:D5").value([
+		["Name", "JAR Name", "Source Found in Modrinth", "Target Found in Modrinth"]
+	]);
+	let rowIndex = 6;
+	for (const item of items) {
+		const sourceFound = item.sourceFound === true;
+		const targetFound = item.targetFound === true;
+		const url = validHttpUrl(item.url);
+		const name = String(item.name || "").trim() || "N/A";
+		worksheet.range(`A${rowIndex}:D${rowIndex}`).value([
+			[name, String(item.fileName || ""), sourceFound ? "✓" : "✕", targetFound ? "✓" : "✕"]
+		]);
+		if (name !== "N/A" && url) {
+			worksheet.cell(`A${rowIndex}`).hyperlink(url).style({
+				fontColor: "0563C1",
+				underline: true
+			})
+		}
+		rowIndex++
+	}
+	const lastDataRow = Math.max(6, rowIndex - 1);
+	worksheet.cell("C3").formula(`COUNTIF(C6:C${lastDataRow},"✓")&" / "&(COUNTIF(C6:C${lastDataRow},"✓")+COUNTIF(C6:C${lastDataRow},"✕"))`);
+	worksheet.cell("D3").formula(`COUNTIF(D6:D${lastDataRow},"✓")&" / "&(COUNTIF(D6:D${lastDataRow},"✓")+COUNTIF(D6:D${lastDataRow},"✕"))`);
+	worksheet.range(`A1:D${lastDataRow}`).style({
+		fontFamily: "Arial",
+		fontSize: 12,
+		horizontalAlignment: "center",
+		verticalAlignment: "center",
+		numberFormat: "@",
+		shrinkToFit: true
+	});
+	worksheet.range("A1:D1").style("bold", true);
+	worksheet.range("A2:D2").style("bold", true);
+	worksheet.range("A5:D5").style("bold", true);
+	applyTableBorders(worksheet, 1, 3);
+	applyTableBorders(worksheet, 5, lastDataRow);
+	const rowHeight = 43.5;
+	const defaultColumnWidth = 29.2857142857;
+	const wideColumnWidth = 42.1428571429;
+	for (let row = 1; row <= lastDataRow; row++) {
+		worksheet.row(row).height(rowHeight)
+	}
+	worksheet.column("A").width(wideColumnWidth);
+	worksheet.column("B").width(wideColumnWidth);
+	worksheet.column("C").width(defaultColumnWidth);
+	worksheet.column("D").width(defaultColumnWidth);
+	const outputPath = path.resolve(result.filePath);
+	await workbook.toFileAsync(outputPath);
+	await addAutoFilterToWorkbook(outputPath, `A5:D${lastDataRow}`);
+	return {
+		canceled: false
+	}
 }
 app.whenReady().then(() => {
 	Menu.setApplicationMenu(null);
@@ -563,6 +693,7 @@ app.whenReady().then(() => {
 			results
 		}
 	});
+	ipcMain.handle("summary:export", async (_event, payload) => exportSummaryWorkbook(payload));
 	ipcMain.handle("shell:open-external", (_event, url) => {
 		const parsed = new URL(url);
 		if (!["https:", "http:"].includes(parsed.protocol)) throw new Error("Unsupported URL protocol");

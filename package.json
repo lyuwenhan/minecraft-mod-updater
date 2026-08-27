@@ -1,6 +1,6 @@
 {
 	"name": "minecraft-mod-updater",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"description": "Find and download compatible Minecraft mod versions for your target game version and mod loader.",
 	"type": "commonjs",
 	"main": "electron-main.js",
@@ -82,6 +82,10 @@
 		"url": "https://github.com/lyuwenhan/minecraft-mod-updater/issues"
 	},
 	"homepage": "https://github.com/lyuwenhan/minecraft-mod-updater#readme",
+	"dependencies": {
+		"jszip": "^3.10.1",
+		"xlsx-populate": "^1.21.0"
+	},
 	"devDependencies": {
 		"electron": "^44.0.0",
 		"electron-builder": "^26.15.3"
