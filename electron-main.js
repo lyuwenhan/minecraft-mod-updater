@@ -63,7 +63,7 @@ function clearExpiredRequestCache() {
 setInterval(clearExpiredRequestCache, CACHE_MAX_AGE_MS);
 class TooManyRequestsError extends Error {
 	constructor() {
-		super("访问过于频繁");
+		super("Too many requests");
 		this.name = "TooManyRequestsError";
 		this.tooManyRequests = true
 	}
@@ -82,7 +82,7 @@ function resetModrinthRequestBlock() {
 }
 
 function getErrorMessage(error) {
-	return error?.tooManyRequests ? "访问过于频繁" : error.message
+	return error?.tooManyRequests ? "Too many requests" : error.message
 }
 
 function isJarPath(filePath) {
