@@ -188,9 +188,7 @@ jobs:
         run: npm ci
 
       - name: Build Electron application
-        run: npx electron-builder --publish always
-        env:
-          GITHUB_RELEASE_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+        run: npm run dist
 
       - name: Upload Windows NSIS installer
         if: runner.os == 'Windows'
@@ -216,6 +214,17 @@ jobs:
           path: dist-electron/*.zip
           compression-level: 0
 
+      - name: Upload Windows updater files
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-update-windows
+          path: |
+            dist-electron/*Setup*.exe
+            dist-electron/*Setup*.exe.blockmap
+            dist-electron/latest.yml
+          compression-level: 0
+
       - name: Upload macOS DMG
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
@@ -230,6 +239,17 @@ jobs:
         with:
           name: minecraft-mod-updater-macos-zip
           path: dist-electron/*.zip
+          compression-level: 0
+
+      - name: Upload macOS updater files
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-update-macos
+          path: |
+            dist-electron/*.zip
+            dist-electron/*.zip.blockmap
+            dist-electron/latest-mac.yml
           compression-level: 0
 
       - name: Upload Linux AppImage
@@ -262,6 +282,16 @@ jobs:
         with:
           name: minecraft-mod-updater-linux-tar-gz
           path: dist-electron/*.tar.gz
+          compression-level: 0
+
+      - name: Upload Linux updater files
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-update-linux
+          path: |
+            dist-electron/*.AppImage
+            dist-electron/latest-linux.yml
           compression-level: 0
 
   release:
@@ -368,6 +398,19 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Download updater files
+        uses: actions/download-artifact@v4
+        with:
+          pattern: auto-update-*
+          path: updater-out
+          merge-multiple: true
+
+      - name: Show updater files
+        shell: bash
+        run: |
+          set -euo pipefail
+          find updater-out -maxdepth 1 -type f -print | sort
+
       - name: Publish auto-update release
         uses: softprops/action-gh-release@v3
         with:
@@ -377,7 +420,8 @@ jobs:
           target_commitish: main
           name: Minecraft Mod Updater v${{ steps.version.outputs.version }}
           body: ${{ needs.gate.outputs.description }}
-          draft: false
+          overwrite_files: true
+          files: updater-out/*
 
   reset-status:
     runs-on: ubuntu-latest
