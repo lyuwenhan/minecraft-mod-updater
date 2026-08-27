@@ -1,6 +1,6 @@
 {
 	"name": "minecraft-mod-updater",
-	"version": "1.0.5",
+	"version": "1.0.6",
 	"description": "Find and download compatible Minecraft mod versions for your target game version and mod loader.",
 	"type": "commonjs",
 	"main": "electron-main.js",
@@ -72,7 +72,15 @@
 		},
 		"deb": {
 			"packageName": "minecraft-mod-updater"
-		}
+		},
+		"publish": [
+			{
+				"provider": "github",
+				"owner": "lyuwenhan",
+				"repo": "minecraft-mod-updater-auto-updater",
+				"releaseType": "draft"
+			}
+		]
 	},
 	"author": {
 		"name": "lyuwenhan",
@@ -83,6 +91,7 @@
 	},
 	"homepage": "https://github.com/lyuwenhan/minecraft-mod-updater#readme",
 	"dependencies": {
+		"electron-updater": "^6.8.9",
 		"jszip": "^3.10.1",
 		"xlsx-populate": "^1.21.0"
 	},

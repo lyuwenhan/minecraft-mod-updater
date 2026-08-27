@@ -19,6 +19,9 @@ const {
 const crypto = require("node:crypto");
 const XlsxPopulate = require("xlsx-populate");
 const JSZip = require("jszip");
+const {
+	autoUpdater
+} = require("electron-updater");
 const APP_NAME = "Minecraft Mod Updater";
 const MODRINTH_API = "https://api.modrinth.com/v2";
 app.setName(APP_NAME);
@@ -534,6 +537,18 @@ async function exportSummaryWorkbook({
 		canceled: false
 	}
 }
+
+function setupAutoUpdater() {
+	if (!app.isPackaged) {
+		return
+	}
+	if (process.platform === "win32" && process.env.PORTABLE_EXECUTABLE_DIR) {
+		return
+	}
+	autoUpdater.checkForUpdatesAndNotify().catch(error => {
+		console.error("Auto update failed:", error.message)
+	})
+}
 app.whenReady().then(() => {
 	Menu.setApplicationMenu(null);
 	ipcMain.handle("modrinth:game-versions", async () => {
@@ -700,6 +715,7 @@ app.whenReady().then(() => {
 		return shell.openExternal(parsed.toString())
 	});
 	createWindow();
+	setupAutoUpdater();
 	app.on("activate", () => {
 		if (BrowserWindow.getAllWindows().length === 0) createWindow()
 	})
