@@ -113,7 +113,7 @@ async function existingJarPaths(paths) {
 
 function createWindow() {
 	const win = new BrowserWindow({
-		title: APP_NAME,
+		title: `${APP_NAME} v${app.getVersion()}`,
 		width: 1100,
 		height: 760,
 		minWidth: 860,
@@ -134,6 +134,9 @@ function createWindow() {
 			event.preventDefault()
 		})
 	}
+	win.on("page-title-updated", event => {
+		event.preventDefault()
+	});
 	win.loadFile("index.html")
 }
 
