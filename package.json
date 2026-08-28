@@ -40,6 +40,7 @@
 				"rpm",
 				"tar.gz"
 			],
+			"artifactName": "Minecraft-Mod-Updater-${version}.${ext}",
 			"category": "Utility",
 			"synopsis": "Update Minecraft mods for a target game version and mod loader",
 			"maintainer": "lyuwenhan <81000228+lyuwenhan@users.noreply.github.com>",
@@ -59,16 +60,18 @@
 				"dmg",
 				"zip"
 			],
+			"artifactName": "Minecraft-Mod-Updater-${version}-${arch}-mac.${ext}",
 			"category": "public.app-category.utilities"
 		},
 		"nsis": {
 			"oneClick": false,
 			"allowToChangeInstallationDirectory": true,
 			"installerIcon": "icons/icon.ico",
-			"uninstallerIcon": "icons/icon.ico"
+			"uninstallerIcon": "icons/icon.ico",
+			"artifactName": "Minecraft-Mod-Updater-Setup-${version}.${ext}"
 		},
 		"portable": {
-			"artifactName": "${productName}-Portable-${version}.${ext}"
+			"artifactName": "Minecraft-Mod-Updater-Portable-${version}.${ext}"
 		},
 		"deb": {
 			"packageName": "minecraft-mod-updater"
