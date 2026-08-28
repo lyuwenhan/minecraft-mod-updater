@@ -1,4 +1,4 @@
 {
-	"needsUpdate": true,
-	"description": "Added an update prompt with options to update now, postpone, or skip the current version."
+	"needsUpdate": false,
+	"description": ""
 }
