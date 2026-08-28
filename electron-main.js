@@ -118,20 +118,22 @@ function createWindow() {
 		height: 760,
 		minWidth: 860,
 		minHeight: 600,
-		autoHideMenuBar: true,
+		autoHideMenuBar: app.isPackaged,
 		webPreferences: {
 			preload: path.join(__dirname, "preload.js"),
 			contextIsolation: true,
 			nodeIntegration: false,
 			sandbox: true,
-			devTools: false
+			devTools: !app.isPackaged
 		}
 	});
-	win.webContents.setZoomFactor(1);
-	win.webContents.setVisualZoomLevelLimits(1, 1);
-	win.webContents.on("will-navigate", event => {
-		event.preventDefault()
-	});
+	if (app.isPackaged) {
+		win.webContents.setZoomFactor(1);
+		win.webContents.setVisualZoomLevelLimits(1, 1);
+		win.webContents.on("will-navigate", event => {
+			event.preventDefault()
+		})
+	}
 	win.loadFile("index.html")
 }
 
@@ -550,7 +552,9 @@ function setupAutoUpdater() {
 	})
 }
 app.whenReady().then(() => {
-	Menu.setApplicationMenu(null);
+	if (app.isPackaged) {
+		Menu.setApplicationMenu(null)
+	}
 	ipcMain.handle("modrinth:game-versions", async () => {
 		resetModrinthRequestBlock();
 		return getGameVersions()
