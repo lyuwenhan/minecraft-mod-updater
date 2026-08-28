@@ -550,7 +550,44 @@ function setupAutoUpdater() {
 	if (process.platform === "win32" && process.env.PORTABLE_EXECUTABLE_DIR) {
 		return
 	}
-	autoUpdater.checkForUpdatesAndNotify().catch(error => {
+	autoUpdater.autoDownload = false;
+	autoUpdater.autoInstallOnAppQuit = false;
+	autoUpdater.on("update-available", async info => {
+		const settings = await readSettings();
+		if (settings.skippedUpdateVersion === info.version) {
+			return
+		}
+		const result = await dialog.showMessageBox({
+			type: "info",
+			title: "Update available",
+			message: `Minecraft Mod Updater v${info.version} is available.`,
+			detail: "Would you like to download and install this update now?",
+			buttons: ["Update now", "Later", "Skip this version"],
+			defaultId: 0,
+			cancelId: 1
+		});
+		if (result.response === 0) {
+			try {
+				await autoUpdater.downloadUpdate()
+			} catch (error) {
+				console.error("Update download failed:", error.message)
+			}
+			return
+		}
+		if (result.response === 2) {
+			await writeSettings({
+				...settings,
+				skippedUpdateVersion: info.version
+			})
+		}
+	});
+	autoUpdater.on("update-downloaded", () => {
+		autoUpdater.quitAndInstall()
+	});
+	autoUpdater.on("error", error => {
+		console.error("Auto update failed:", error.message)
+	});
+	autoUpdater.checkForUpdates().catch(error => {
 		console.error("Auto update failed:", error.message)
 	})
 }

@@ -19,7 +19,7 @@ Instead of checking every mod manually, import your existing mods, choose your t
 - Export search results to an Excel workbook
 - Filter exported results by availability
 - Remember recently used folders
-- Automatically check for application updates on supported versions
+- Automatically check for application updates with options to update now, update later, or skip a version
 
 ## Supported Platforms
 
@@ -31,7 +31,7 @@ Minecraft Mod Updater is available for:
 
 Available download formats may vary by platform.
 
-On Windows, both installer and portable versions may be available.
+Automatic updates are supported by the installed version, while the portable version must be updated manually.
 
 ## How to Use
 
@@ -108,11 +108,21 @@ This makes it easier to review large modpacks and find the mods that still need 
 
 ## Automatic Updates
 
-Supported installed versions of Minecraft Mod Updater can check for newer application releases automatically.
+Supported installed versions of Minecraft Mod Updater automatically check for newer application releases.
 
-When a newer version is available, the application can download the update in the background.
+When a new version is available, you can choose to:
 
-The Windows portable version does not update itself automatically.
+- Update now
+- Update later
+- Skip the current version
+
+If you choose **Update now**, Minecraft Mod Updater will download the update and install it automatically.
+
+If you choose **Update later**, you can continue using the current version and will be prompted again later.
+
+If you choose **Skip this version**, that version will no longer be shown, but newer versions will still be offered when available.
+
+The portable version does not update itself automatically.
 
 ## Notes
 
@@ -174,6 +184,7 @@ Make sure:
 - You are using an installed version that supports automatic updates
 - A newer Minecraft Mod Updater version has actually been released
 - Your internet connection can access GitHub
+- The available version has not previously been skipped
 
 The Windows portable version does not update automatically.
 
