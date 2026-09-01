@@ -113,7 +113,6 @@ button:disabled {
 	width: 30px
 }
 .provider-status:before {
-	background-image: url(icons/modrinth.svg);
 	background-position: 50%;
 	background-repeat: no-repeat;
 	background-size: contain;
@@ -121,6 +120,12 @@ button:disabled {
 	display: block;
 	height: 22px;
 	width: 22px
+}
+.provider-icon-modrinth:before {
+	background-image: url(icons/modrinth.svg)
+}
+.provider-icon-lyuwenhan:before {
+	background-image: url(favicon.png)
 }
 .provider-status:after {
 	align-items: center;
@@ -172,4 +177,7 @@ button:disabled {
 }
 body:not(:has(#operation-panel .file-card)) .after-import {
 	display: none
+}
+img{
+	-webkit-user-drag: none;
 }

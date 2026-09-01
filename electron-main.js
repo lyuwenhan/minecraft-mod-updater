@@ -24,11 +24,14 @@ const {
 } = require("electron-updater");
 const APP_NAME = "Minecraft Mod Updater";
 const MODRINTH_API = "https://api.modrinth.com/v2";
+const MODRINTH_CDN_PREFIX = "https://cdn.modrinth.com/data/";
+const LYUWENHAN_EXTENSIONS_BASE = "https://lyuwenhan.github.io/extensions/minecraft-java";
+const LYUWENHAN_EXTENSIONS_DATA_URL = `${LYUWENHAN_EXTENSIONS_BASE}/data/versions.json`;
+const LYUWENHAN_EXTENSIONS_DIST_PREFIX = "/extensions/minecraft-java/data/dist/";
 app.setName(APP_NAME);
 const requestCache = new Map;
 let requestCacheLastOperation = Date.now();
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1e3;
-const MODRINTH_CDN_PREFIX = "https://cdn.modrinth.com/data/";
 const settingsFileName = "settings.json";
 async function readSettings() {
 	try {
@@ -187,6 +190,32 @@ async function apiRequest({
 	if (useCache) requestCache.set(key, structuredClone(data));
 	return data
 }
+async function lyuwenhanExtensionsRequest(useCache = true) {
+	clearExpiredRequestCache();
+	const key = cacheKey("GET", LYUWENHAN_EXTENSIONS_DATA_URL);
+	if (useCache && requestCache.has(key)) return structuredClone(requestCache.get(key));
+	const controller = new AbortController;
+	activeFetchControllers.add(controller);
+	let response;
+	try {
+		response = await fetch(LYUWENHAN_EXTENSIONS_DATA_URL, {
+			headers: {
+				Accept: "application/json",
+				"User-Agent": "minecraft-mod-updater"
+			},
+			signal: controller.signal
+		})
+	} finally {
+		activeFetchControllers.delete(controller)
+	}
+	if (!response.ok) {
+		const text = await response.text();
+		throw new Error(`${response.status} ${response.statusText}: ${text.slice(0,500)}`)
+	}
+	const data = await response.json();
+	if (useCache) requestCache.set(key, structuredClone(data));
+	return data
+}
 async function getGameVersions() {
 	const versions = await apiRequest({
 		url: `${MODRINTH_API}/tag/game_version`,
@@ -211,6 +240,34 @@ async function readJar(filePath) {
 		size: stat.size,
 		sha1: hash.digest("hex")
 	}
+}
+
+function lyuwenhanExtensionsItem(data, sha1) {
+	const sha1Entry = data?.data?.sha1?.[sha1];
+	if (!sha1Entry || typeof sha1Entry.id !== "string" || !sha1Entry.id) return null;
+	const info = data?.[sha1Entry.id];
+	if (!info || typeof info !== "object" || Array.isArray(info)) return null;
+	const links = info.link && typeof info.link === "object" && !Array.isArray(info.link) ? info.link : {};
+	return {
+		id: sha1Entry.id,
+		version: typeof sha1Entry.version === "string" ? sha1Entry.version : "",
+		versions: Array.isArray(info.versions) ? info.versions.filter(version => typeof version === "string") : [],
+		hasIcon: info.hasIcon === true,
+		displayName: typeof info.displayName === "string" ? info.displayName : "",
+		description: typeof info.description === "string" ? info.description : "",
+		link: links,
+		iconUrl: info.hasIcon === true ? `${LYUWENHAN_EXTENSIONS_BASE}/data/assets/${encodeURIComponent(sha1Entry.id)}/icon.png` : ""
+	}
+}
+async function lookupLyuwenhanExtensionsBatch(files, useCache) {
+	const output = new Map;
+	if (!files.length) return output;
+	const data = await lyuwenhanExtensionsRequest(useCache);
+	for (const file of files) {
+		const item = lyuwenhanExtensionsItem(data, file.sha1);
+		if (item) output.set(file.sha1, item)
+	}
+	return output
 }
 async function lookupModrinthBatch(files, useCache) {
 	if (!files.length) return new Map;
@@ -248,8 +305,11 @@ async function lookupModrinthBatch(files, useCache) {
 }
 
 function providerIdentityKeys(item) {
+	const keys = [];
+	if (item.lyuwenhanExtensions?.id) keys.push(`lyuwenhan:${item.lyuwenhanExtensions.id}`);
 	const modrinthId = item.modrinth?.project?.id || item.modrinth?.version?.project_id || "";
-	return modrinthId ? [`modrinth:${modrinthId}`] : []
+	if (modrinthId) keys.push(`modrinth:${modrinthId}`);
+	return keys
 }
 
 function uniqueFilesByHash(files, knownHashes = []) {
@@ -275,18 +335,26 @@ function uniqueFilesByProviderId(items, knownProviderIds = []) {
 	return unique
 }
 async function enrichFiles(files, useCache) {
-	const modrinthErrors = [];
+	const lookupErrors = [];
+	let lyuwenhanExtensionsByHash = new Map;
+	try {
+		lyuwenhanExtensionsByHash = await lookupLyuwenhanExtensionsBatch(files, useCache)
+	} catch (error) {
+		lookupErrors.push(`Lyuwenhan Extensions: ${error.message}`)
+	}
+	const modrinthFiles = files.filter(file => !lyuwenhanExtensionsByHash.has(file.sha1));
 	let modrinthByHash = new Map;
 	try {
-		modrinthByHash = await lookupModrinthBatch(files, useCache)
+		modrinthByHash = await lookupModrinthBatch(modrinthFiles, useCache)
 	} catch (error) {
 		if (error?.tooManyRequests) throw error;
-		modrinthErrors.push(`Modrinth: ${error.message}`)
+		lookupErrors.push(`Modrinth: ${error.message}`)
 	}
 	return files.map(file => ({
 		...file,
-		modrinth: modrinthByHash.get(file.sha1) || null,
-		lookupErrors: modrinthErrors
+		lyuwenhanExtensions: lyuwenhanExtensionsByHash.get(file.sha1) || null,
+		modrinth: lyuwenhanExtensionsByHash.has(file.sha1) ? null : modrinthByHash.get(file.sha1) || null,
+		lookupErrors
 	}))
 }
 
@@ -297,6 +365,33 @@ function acceptableRelease(type, minimum) {
 		release: 2
 	};
 	return rank[type] >= rank[minimum]
+}
+async function findLyuwenhanExtensionsDownload(item, preferences, useCache) {
+	const id = item.lyuwenhanExtensions?.id;
+	if (!id || !preferences.gameVersion) return null;
+	const data = await lyuwenhanExtensionsRequest(useCache);
+	if (data?.data?.ext !== "jar") return null;
+	const version = data?.data?.["newest-version"]?.[id]?.[preferences.gameVersion];
+	if (typeof version !== "string" || !version) return null;
+	let sha1 = "";
+	for (const [hash, entry] of Object.entries(data?.data?.sha1 || {})) {
+		if (entry?.id === id && entry?.version === version) {
+			sha1 = hash;
+			break
+		}
+	}
+	return {
+		provider: "lyuwenhan",
+		projectId: id,
+		projectSlug: id,
+		gameVersion: preferences.gameVersion,
+		loader: preferences.loader,
+		fileName: `${id}-${version}.jar`,
+		url: `${LYUWENHAN_EXTENSIONS_BASE}/data/dist/${encodeURIComponent(id)}-${encodeURIComponent(version)}.jar`,
+		sha1,
+		sha512: "",
+		versionName: version
+	}
 }
 async function findModrinthDownload(item, preferences, useCache) {
 	const projectId = item.modrinth?.version?.project_id;
@@ -337,6 +432,7 @@ function safeNamePart(value) {
 }
 
 function plannedDownloadFileName(download) {
+	if (download.provider === "lyuwenhan") return safeFileName(download.fileName);
 	const project = safeNamePart(download.projectSlug || download.projectId);
 	const gameVersion = safeNamePart(download.gameVersion);
 	const loader = safeNamePart(download.loader);
@@ -344,13 +440,25 @@ function plannedDownloadFileName(download) {
 	return `${project}-${gameVersion}-${loader}-${version}.jar`
 }
 
-function validateDownloadMetadata(download) {
-	if (!download?.url || !download.url.startsWith(MODRINTH_CDN_PREFIX) || download.url.includes("..")) {
-		throw new Error("Invalid Modrinth CDN URL")
+function validDownloadUrl(download) {
+	try {
+		const parsed = new URL(download.url);
+		if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.hash) return false;
+		if (download.provider === "modrinth") return download.url.startsWith(MODRINTH_CDN_PREFIX) && !download.url.includes("..");
+		if (download.provider === "lyuwenhan") {
+			return parsed.hostname === "lyuwenhan.github.io" && parsed.pathname.startsWith(LYUWENHAN_EXTENSIONS_DIST_PREFIX) && !parsed.pathname.includes("..")
+		}
+		return false
+	} catch {
+		return false
 	}
+}
+
+function validateDownloadMetadata(download) {
+	if (!download?.url || !validDownloadUrl(download)) throw new Error("Invalid download URL");
 	if (!isJarPath(download.fileName || "")) throw new Error("Downloaded file metadata is not a JAR");
 	if (!isJarPath(plannedDownloadFileName(download))) throw new Error("Planned file name is not a JAR");
-	if (!download.sha1 && !download.sha512) throw new Error("Downloaded file has no hash metadata")
+	if (download.provider === "modrinth" && !download.sha1 && !download.sha512) throw new Error("Downloaded file has no hash metadata")
 }
 
 function hashVerifier(download) {
@@ -382,12 +490,12 @@ async function downloadFile(download, directory) {
 			signal: controller.signal
 		})
 	} catch (error) {
-		if (modrinthRequestsBlocked || error.name === "AbortError") throw new TooManyRequestsError;
+		if (download.provider === "modrinth" && (modrinthRequestsBlocked || error.name === "AbortError")) throw new TooManyRequestsError;
 		throw error
 	} finally {
 		activeFetchControllers.delete(controller)
 	}
-	if (response.status === 429) {
+	if (response.status === 429 && download.provider === "modrinth") {
 		abortActiveFetches();
 		throw new TooManyRequestsError
 	}
@@ -490,7 +598,7 @@ async function exportSummaryWorkbook({
 	worksheet.cell("A3").value(String(targetVersion || ""));
 	worksheet.cell("B3").value(capitalizeFirst(targetLoader));
 	worksheet.range("A5:D5").value([
-		["Name", "JAR Name", "Source Found in Modrinth", "Target Found in Modrinth"]
+		["Name", "JAR Name", "Source Found", "Target Found"]
 	]);
 	let rowIndex = 6;
 	for (const item of items) {
@@ -671,26 +779,21 @@ app.whenReady().then(() => {
 		resetModrinthRequestBlock();
 		const output = [];
 		for (const item of items) {
-			let modrinthDownload = null;
-			let modrinthError = "";
-			if (!item.modrinth) {
-				output.push({
-					modrinthDownload,
-					download: null,
-					modrinthError
-				});
-				continue
-			}
+			let download = null;
+			let downloadError = "";
 			try {
-				modrinthDownload = await findModrinthDownload(item, preferences, useCache)
+				if (item.lyuwenhanExtensions) download = await findLyuwenhanExtensionsDownload(item, preferences, useCache);
+				else if (item.modrinth) download = await findModrinthDownload(item, preferences, useCache)
 			} catch (error) {
 				if (error?.tooManyRequests) throw error;
-				modrinthDownload = null
+				download = null;
+				downloadError = `${item.lyuwenhanExtensions?"Lyuwenhan Extensions":"Modrinth"}: ${getErrorMessage(error)}`
 			}
 			output.push({
-				modrinthDownload,
-				download: modrinthDownload,
-				modrinthError
+				download,
+				downloadError,
+				modrinthDownload: download?.provider === "modrinth" ? download : null,
+				modrinthError: ""
 			})
 		}
 		return output

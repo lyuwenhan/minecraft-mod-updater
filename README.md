@@ -8,7 +8,7 @@ Instead of checking every mod manually, import your existing mods, choose your t
 
 - Import individual mod files
 - Import all mod files from a folder
-- Automatically identify supported mods
+- Automatically identify supported mods from [Modrinth](https://modrinth.com) and [lyuwenhan/minecraft-java-edition-mods](https://github.com/lyuwenhan/minecraft-java-edition-mods)
 - Search for versions compatible with your target Minecraft version
 - Support Fabric, Forge, NeoForge, Quilt, and other available loaders
 - Choose between release, beta, and alpha versions
@@ -126,7 +126,7 @@ The portable version does not update itself automatically.
 
 ## Notes
 
-Minecraft Mod Updater can only provide versions that are available from supported mod sources.
+Minecraft Mod Updater can only provide versions that are available from supported mod sources, including [Modrinth](https://modrinth.com) and [lyuwenhan/minecraft-java-edition-mods](https://github.com/lyuwenhan/minecraft-java-edition-mods).
 
 Some mods may not be identified or may not have a version compatible with your selected:
 
