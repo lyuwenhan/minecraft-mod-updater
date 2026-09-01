@@ -178,6 +178,6 @@ button:disabled {
 body:not(:has(#operation-panel .file-card)) .after-import {
 	display: none
 }
-img{
-	-webkit-user-drag: none;
+img {
+	-webkit-user-drag: none
 }
