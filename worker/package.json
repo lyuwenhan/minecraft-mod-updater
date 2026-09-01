@@ -1,5 +1,5 @@
 {
-	"name": "minecraft-mod-updater-curseforge-worker",
+	"name": "minecraft-mod-updater",
 	"version": "1.0.0",
 	"private": true,
 	"type": "module",

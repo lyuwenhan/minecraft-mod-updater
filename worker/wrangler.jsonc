@@ -1,5 +1,5 @@
 {
-	"name": "minecraft-mod-updater-curseforge-worker",
+	"name": "minecraft-mod-updater",
 	"main": "src/index.js",
 	"compatibility_date": "2026-09-01",
 	"observability": {
