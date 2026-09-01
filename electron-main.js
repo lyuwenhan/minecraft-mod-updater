@@ -976,16 +976,13 @@ function setupAutoUpdater() {
 		}
 	});
 	autoUpdater.on("update-downloaded", () => {
-		autoUpdater.quitAndInstall({
-			isSilent: true,
-			isForceRunAfter: true
-		})
+		autoUpdater.quitAndInstall(true, true)
 	});
 	autoUpdater.on("error", error => {
 		console.error("Auto update failed:", error.message)
 	});
-	updateCheckInterval = setInterval(checkForUpdates, 10 * 60 * 1e3)
-	checkForUpdates();
+	updateCheckInterval = setInterval(checkForUpdates, 10 * 60 * 1e3);
+	checkForUpdates()
 }
 app.whenReady().then(() => {
 	if (app.isPackaged) {

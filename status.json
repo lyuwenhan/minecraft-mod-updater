@@ -1,4 +1,4 @@
 {
-	"needsUpdate": false,
-	"description": ""
+	"needsUpdate": true,
+	"description": "Fixed auto updater"
 }
