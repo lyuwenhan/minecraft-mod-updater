@@ -1,6 +1,6 @@
 const CURSEFORGE_BASE_URL = "https://api.curseforge.com";
+const CURSEFORGE_MINECRAFT_GAME_ID = 432;
 const SAFE_VERSION = /^[A-Za-z0-9.-]{1,64}$/;
-const SAFE_POSITIVE_INTEGER = /^[1-9][0-9]{0,15}$/;
 const MAX_FINGERPRINTS = 100;
 class HttpError extends Error {
 	constructor(status, code, message) {
@@ -94,15 +94,6 @@ function requireSecret(env) {
 	return env.CURSEFORGE_API_KEY
 }
 
-function parsePositiveInteger(value, fieldName) {
-	if (value === null) {
-		throw new HttpError(400, "missing_parameter", `${fieldName} is required`)
-	}
-	if (!SAFE_POSITIVE_INTEGER.test(value)) {
-		throw new HttpError(400, "invalid_parameter", `${fieldName} must be a positive integer`)
-	}
-	return value
-}
 
 function parseGameVersion(value) {
 	if (value === null) {
@@ -185,11 +176,11 @@ async function handleFingerprintRequest(request, env) {
 	if (request.method !== "POST") {
 		throw new HttpError(405, "method_not_allowed", "Method not allowed")
 	}
-	const url = new URL(request.url);
-	const gameId = parsePositiveInteger(url.searchParams.get("gameId"), "gameId");
+
 	const body = await readJsonObject(request);
 	const fingerprints = parseFingerprints(body.fingerprints);
-	return curseForgeFetch(env, `/v1/fingerprints/${gameId}`, {
+
+	return curseForgeFetch(env, `/v1/fingerprints/${CURSEFORGE_MINECRAFT_GAME_ID}`, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json"
