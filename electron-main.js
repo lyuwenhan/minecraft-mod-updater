@@ -928,7 +928,25 @@ function setupAutoUpdater() {
 	}
 	autoUpdater.autoDownload = false;
 	autoUpdater.autoInstallOnAppQuit = false;
+	let isCheckingForUpdates = false;
+	let updateCheckInterval = null;
+	async function checkForUpdates() {
+		if (isCheckingForUpdates) {
+			return
+		}
+		isCheckingForUpdates = true;
+		try {
+			await autoUpdater.checkForUpdates()
+		} catch (error) {
+			console.error("Auto update failed:", error.message)
+		}
+		isCheckingForUpdates = false
+	}
 	autoUpdater.on("update-available", async info => {
+		if (updateCheckInterval) {
+			clearInterval(updateCheckInterval);
+			updateCheckInterval = null
+		}
 		const settings = await readSettings();
 		if (settings.skippedUpdateVersion === info.version) {
 			return
@@ -966,9 +984,8 @@ function setupAutoUpdater() {
 	autoUpdater.on("error", error => {
 		console.error("Auto update failed:", error.message)
 	});
-	autoUpdater.checkForUpdates().catch(error => {
-		console.error("Auto update failed:", error.message)
-	})
+	updateCheckInterval = setInterval(checkForUpdates, 10 * 60 * 1e3)
+	checkForUpdates();
 }
 app.whenReady().then(() => {
 	if (app.isPackaged) {
