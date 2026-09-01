@@ -128,7 +128,9 @@ button:disabled {
 	background-image: url(icons/modrinth.svg)
 }
 .provider-icon-lyuwenhan:before {
-	background-image: url(favicon.png)
+	background-image: url(favicon.png);
+	height: 30px;
+	width: 30px
 }
 .provider-status:after {
 	align-items: center;
