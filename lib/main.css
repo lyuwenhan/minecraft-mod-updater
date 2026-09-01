@@ -121,16 +121,17 @@ button:disabled {
 	background-size: contain;
 	content: "";
 	display: block;
-	height: 22px;
-	width: 22px
+	height: 100%;
+	width: 100%
 }
 .provider-icon-modrinth:before {
 	background-image: url(icons/modrinth.svg)
 }
+.provider-icon-curseforge:before {
+	background-image: url(icons/curseforge.svg)
+}
 .provider-icon-lyuwenhan:before {
-	background-image: url(favicon.png);
-	height: 30px;
-	width: 30px
+	background-image: url(favicon.png)
 }
 .provider-status:after {
 	align-items: center;

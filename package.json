@@ -1,6 +1,6 @@
 {
 	"name": "minecraft-mod-updater",
-	"version": "1.0.11",
+	"version": "1.1.0",
 	"description": "Find and download compatible Minecraft mod versions for your target game version and mod loader.",
 	"type": "commonjs",
 	"main": "electron-main.js",

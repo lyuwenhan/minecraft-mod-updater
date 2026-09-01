@@ -81,7 +81,9 @@ function handleOptions(request, env) {
 
 function assertCorsAllowed(request, env) {
 	const origin = request.headers.get("Origin");
-	if (!origin) return;
+	if (!origin) {
+		return
+	}
 	if (!env.ALLOWED_ORIGIN || origin !== env.ALLOWED_ORIGIN) {
 		throw new HttpError(403, "origin_forbidden", "Origin is not allowed")
 	}
@@ -93,7 +95,6 @@ function requireSecret(env) {
 	}
 	return env.CURSEFORGE_API_KEY
 }
-
 
 function parseGameVersion(value) {
 	if (value === null) {
@@ -171,15 +172,12 @@ async function curseForgeFetch(env, path, init = {}) {
 		}
 	})
 }
-
 async function handleFingerprintRequest(request, env) {
 	if (request.method !== "POST") {
 		throw new HttpError(405, "method_not_allowed", "Method not allowed")
 	}
-
 	const body = await readJsonObject(request);
 	const fingerprints = parseFingerprints(body.fingerprints);
-
 	return curseForgeFetch(env, `/v1/fingerprints/${CURSEFORGE_MINECRAFT_GAME_ID}`, {
 		method: "POST",
 		headers: {

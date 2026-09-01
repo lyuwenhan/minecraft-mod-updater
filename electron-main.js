@@ -25,6 +25,8 @@ const {
 const APP_NAME = "Minecraft Mod Updater";
 const MODRINTH_API = "https://api.modrinth.com/v2";
 const MODRINTH_CDN_PREFIX = "https://cdn.modrinth.com/data/";
+const CURSEFORGE_PROXY_BASE = "http://minecraft-mod-updater.lyuwenhan.workers.dev/cf";
+const CURSEFORGE_DOWNLOAD_HOST = "edge.forgecdn.net";
 const LYUWENHAN_EXTENSIONS_BASE = "https://lyuwenhan.github.io/extensions/minecraft-java";
 const LYUWENHAN_EXTENSIONS_DATA_URL = `${LYUWENHAN_EXTENSIONS_BASE}/data/versions.json`;
 const LYUWENHAN_EXTENSIONS_DIST_PREFIX = "/extensions/minecraft-java/data/dist/";
@@ -48,7 +50,9 @@ async function writeSettings(settings) {
 	await fs.writeFile(settingsPath, JSON.stringify(settings, null, "\t"))
 }
 async function getExistingDirectory(directory) {
-	if (!directory) return undefined;
+	if (!directory) {
+		return undefined
+	}
 	try {
 		const stat = await fs.stat(directory);
 		return stat.isDirectory() ? directory : undefined
@@ -81,7 +85,9 @@ let modrinthRequestsBlocked = false;
 
 function abortActiveFetches() {
 	modrinthRequestsBlocked = true;
-	for (const controller of activeFetchControllers) controller.abort();
+	for (const controller of activeFetchControllers) {
+		controller.abort()
+	}
 	activeFetchControllers.clear()
 }
 
@@ -99,7 +105,9 @@ function isJarPath(filePath) {
 
 function resolveJarPath(filePath) {
 	const resolved = path.resolve(filePath);
-	if (!isJarPath(resolved)) throw new Error(`Not a JAR file: ${path.basename(filePath)}`);
+	if (!isJarPath(resolved)) {
+		throw new Error(`Not a JAR file: ${path.basename(filePath)}`)
+	}
 	return resolved
 }
 async function existingJarPaths(paths) {
@@ -108,7 +116,9 @@ async function existingJarPaths(paths) {
 		const resolved = resolveJarPath(filePath);
 		try {
 			const stat = await fs.stat(resolved);
-			if (stat.isFile()) output.push(resolved)
+			if (stat.isFile()) {
+				output.push(resolved)
+			}
 		} catch {}
 	}
 	return output
@@ -153,14 +163,20 @@ async function apiRequest({
 	useCache = true
 }) {
 	clearExpiredRequestCache();
-	if (modrinthRequestsBlocked) throw new TooManyRequestsError;
+	if (modrinthRequestsBlocked) {
+		throw new TooManyRequestsError
+	}
 	const key = cacheKey(method, url, body);
-	if (useCache && requestCache.has(key)) return structuredClone(requestCache.get(key));
+	if (useCache && requestCache.has(key)) {
+		return structuredClone(requestCache.get(key))
+	}
 	const headers = {
 		Accept: "application/json",
 		"User-Agent": "minecraft-mod-updater"
 	};
-	if (body !== undefined) headers["Content-Type"] = "application/json";
+	if (body !== undefined) {
+		headers["Content-Type"] = "application/json"
+	}
 	const controller = new AbortController;
 	activeFetchControllers.add(controller);
 	let response;
@@ -172,7 +188,9 @@ async function apiRequest({
 			signal: controller.signal
 		})
 	} catch (error) {
-		if (modrinthRequestsBlocked || error.name === "AbortError") throw new TooManyRequestsError;
+		if (modrinthRequestsBlocked || error.name === "AbortError") {
+			throw new TooManyRequestsError
+		}
 		throw error
 	} finally {
 		activeFetchControllers.delete(controller)
@@ -181,19 +199,25 @@ async function apiRequest({
 		abortActiveFetches();
 		throw new TooManyRequestsError
 	}
-	if (response.status === 404) return null;
+	if (response.status === 404) {
+		return null
+	}
 	if (!response.ok) {
 		const text = await response.text();
 		throw new Error(`${response.status} ${response.statusText}: ${text.slice(0,500)}`)
 	}
 	const data = await response.json();
-	if (useCache) requestCache.set(key, structuredClone(data));
+	if (useCache) {
+		requestCache.set(key, structuredClone(data))
+	}
 	return data
 }
 async function lyuwenhanExtensionsRequest(useCache = true) {
 	clearExpiredRequestCache();
 	const key = cacheKey("GET", LYUWENHAN_EXTENSIONS_DATA_URL);
-	if (useCache && requestCache.has(key)) return structuredClone(requestCache.get(key));
+	if (useCache && requestCache.has(key)) {
+		return structuredClone(requestCache.get(key))
+	}
 	const controller = new AbortController;
 	activeFetchControllers.add(controller);
 	let response;
@@ -213,7 +237,9 @@ async function lyuwenhanExtensionsRequest(useCache = true) {
 		throw new Error(`${response.status} ${response.statusText}: ${text.slice(0,500)}`)
 	}
 	const data = await response.json();
-	if (useCache) requestCache.set(key, structuredClone(data));
+	if (useCache) {
+		requestCache.set(key, structuredClone(data))
+	}
 	return data
 }
 async function getGameVersions() {
@@ -223,30 +249,67 @@ async function getGameVersions() {
 	}) || [];
 	return versions.filter(version => version && version.version_type === "release" && typeof version.version === "string" && version.version).sort((left, right) => String(right.date || "").localeCompare(String(left.date || ""))).map(version => version.version)
 }
+
+function curseForgeFingerprintBuffer(buffer) {
+	const filtered = [];
+	for (const byte of buffer) {
+		if (byte !== 9 && byte !== 10 && byte !== 13 && byte !== 32) {
+			filtered.push(byte)
+		}
+	}
+	const length = filtered.length;
+	let hash = 1 ^ length;
+	let index = 0;
+	while (index <= length - 4) {
+		let k = filtered[index] | filtered[index + 1] << 8 | filtered[index + 2] << 16 | filtered[index + 3] << 24;
+		k = Math.imul(k, 1540483477);
+		k ^= k >>> 24;
+		k = Math.imul(k, 1540483477);
+		hash = Math.imul(hash, 1540483477);
+		hash ^= k;
+		index += 4
+	}
+	const remaining = length - index;
+	if (remaining === 3) {
+		hash ^= filtered[index + 2] << 16
+	}
+	if (remaining >= 2) {
+		hash ^= filtered[index + 1] << 8
+	}
+	if (remaining >= 1) {
+		hash ^= filtered[index];
+		hash = Math.imul(hash, 1540483477)
+	}
+	hash ^= hash >>> 13;
+	hash = Math.imul(hash, 1540483477);
+	hash ^= hash >>> 15;
+	return hash >>> 0
+}
 async function readJar(filePath) {
 	const resolved = resolveJarPath(filePath);
 	const stat = await fs.stat(resolved);
-	if (!stat.isFile()) throw new Error(`Not a file: ${path.basename(resolved)}`);
-	const hash = crypto.createHash("sha1");
-	await pipeline(nodeFs.createReadStream(resolved), new Transform({
-		transform(chunk, _encoding, callback) {
-			hash.update(chunk);
-			callback()
-		}
-	}));
+	if (!stat.isFile()) {
+		throw new Error(`Not a file: ${path.basename(resolved)}`)
+	}
+	const buffer = await fs.readFile(resolved);
 	return {
 		path: resolved,
 		fileName: path.basename(resolved),
 		size: stat.size,
-		sha1: hash.digest("hex")
+		sha1: crypto.createHash("sha1").update(buffer).digest("hex"),
+		curseForgeFingerprint: curseForgeFingerprintBuffer(buffer)
 	}
 }
 
 function lyuwenhanExtensionsItem(data, sha1) {
 	const sha1Entry = data?.data?.sha1?.[sha1];
-	if (!sha1Entry || typeof sha1Entry.id !== "string" || !sha1Entry.id) return null;
+	if (!sha1Entry || typeof sha1Entry.id !== "string" || !sha1Entry.id) {
+		return null
+	}
 	const info = data?.[sha1Entry.id];
-	if (!info || typeof info !== "object" || Array.isArray(info)) return null;
+	if (!info || typeof info !== "object" || Array.isArray(info)) {
+		return null
+	}
 	const links = info.link && typeof info.link === "object" && !Array.isArray(info.link) ? info.link : {};
 	return {
 		id: sha1Entry.id,
@@ -261,16 +324,22 @@ function lyuwenhanExtensionsItem(data, sha1) {
 }
 async function lookupLyuwenhanExtensionsBatch(files, useCache) {
 	const output = new Map;
-	if (!files.length) return output;
+	if (!files.length) {
+		return output
+	}
 	const data = await lyuwenhanExtensionsRequest(useCache);
 	for (const file of files) {
 		const item = lyuwenhanExtensionsItem(data, file.sha1);
-		if (item) output.set(file.sha1, item)
+		if (item) {
+			output.set(file.sha1, item)
+		}
 	}
 	return output
 }
 async function lookupModrinthBatch(files, useCache) {
-	if (!files.length) return new Map;
+	if (!files.length) {
+		return new Map
+	}
 	const hashes = [...new Set(files.map(file => file.sha1))];
 	const versionsByHash = await apiRequest({
 		method: "POST",
@@ -304,11 +373,81 @@ async function lookupModrinthBatch(files, useCache) {
 	return output
 }
 
+function chunkArray(items, size) {
+	const chunks = [];
+	for (let index = 0; index < items.length; index += size) {
+		chunks.push(items.slice(index, index + size))
+	}
+	return chunks
+}
+async function lookupCurseForgeBatch(files, useCache) {
+	if (!files.length) {
+		return new Map
+	}
+	const filesByFingerprint = new Map;
+	for (const file of files) {
+		if (Number.isInteger(file.curseForgeFingerprint)) {
+			filesByFingerprint.set(file.curseForgeFingerprint, file)
+		}
+	}
+	const output = new Map(files.map(file => [file.sha1, null]));
+	if (!filesByFingerprint.size) {
+		return output
+	}
+	const matches = [];
+	for (const fingerprints of chunkArray([...filesByFingerprint.keys()], 100)) {
+		const response = await apiRequest({
+			method: "POST",
+			url: `${CURSEFORGE_PROXY_BASE}/fingerprints`,
+			body: JSON.stringify({
+				fingerprints
+			}),
+			useCache
+		}) || {};
+		for (const match of response?.data?.exactMatches || []) {
+			matches.push(match)
+		}
+	}
+	const modIds = [...new Set(matches.map(match => match?.id || match?.file?.modId).filter(id => Number.isInteger(id)))];
+	const modsById = new Map;
+	await Promise.all(modIds.map(async modId => {
+		const response = await apiRequest({
+			url: `${CURSEFORGE_PROXY_BASE}/mods/${encodeURIComponent(modId)}`,
+			useCache
+		});
+		if (response?.data) {
+			modsById.set(modId, response.data)
+		}
+	}));
+	for (const match of matches) {
+		const fingerprint = match?.file?.fileFingerprint;
+		const file = filesByFingerprint.get(fingerprint);
+		if (!file) {
+			continue
+		}
+		const modId = match?.id || match?.file?.modId;
+		output.set(file.sha1, {
+			match,
+			file: match?.file || null,
+			mod: modsById.get(modId) || null
+		})
+	}
+	return output
+}
+
 function providerIdentityKeys(item) {
 	const keys = [];
-	if (item.lyuwenhanExtensions?.id) keys.push(`lyuwenhan:${item.lyuwenhanExtensions.id}`);
+	if (item.lyuwenhanExtensions?.id) {
+		keys.push(`lyuwenhan:${item.lyuwenhanExtensions.id}`)
+	}
 	const modrinthId = item.modrinth?.project?.id || item.modrinth?.version?.project_id || "";
-	if (modrinthId) keys.push(`modrinth:${modrinthId}`);
+	if (modrinthId) {
+		keys.push(`modrinth:${modrinthId}`)
+	}
+	const curseForgeId = item.curseforge?.mod?.id || item.curseforge?.file?.modId || item.curseforge?.match?.id || "";
+	if (curseForgeId) {
+		keys.push(`curseforge:${curseForgeId}`)
+	}
 	return keys
 }
 
@@ -316,7 +455,9 @@ function uniqueFilesByHash(files, knownHashes = []) {
 	const hashes = new Set(knownHashes);
 	const unique = [];
 	for (const file of files) {
-		if (hashes.has(file.sha1)) continue;
+		if (hashes.has(file.sha1)) {
+			continue
+		}
 		hashes.add(file.sha1);
 		unique.push(file)
 	}
@@ -328,8 +469,12 @@ function uniqueFilesByProviderId(items, knownProviderIds = []) {
 	const unique = [];
 	for (const item of items) {
 		const keys = providerIdentityKeys(item);
-		if (keys.some(key => providerIds.has(key))) continue;
-		for (const key of keys) providerIds.add(key);
+		if (keys.some(key => providerIds.has(key))) {
+			continue
+		}
+		for (const key of keys) {
+			providerIds.add(key)
+		}
 		unique.push(item)
 	}
 	return unique
@@ -342,18 +487,28 @@ async function enrichFiles(files, useCache) {
 	} catch (error) {
 		lookupErrors.push(`Lyuwenhan Extensions: ${error.message}`)
 	}
-	const modrinthFiles = files.filter(file => !lyuwenhanExtensionsByHash.has(file.sha1));
+	const fallbackFiles = files.filter(file => !lyuwenhanExtensionsByHash.has(file.sha1));
 	let modrinthByHash = new Map;
-	try {
-		modrinthByHash = await lookupModrinthBatch(modrinthFiles, useCache)
-	} catch (error) {
-		if (error?.tooManyRequests) throw error;
-		lookupErrors.push(`Modrinth: ${error.message}`)
+	let curseForgeByHash = new Map;
+	const [modrinthResult, curseForgeResult] = await Promise.allSettled([lookupModrinthBatch(fallbackFiles, useCache), lookupCurseForgeBatch(fallbackFiles, useCache)]);
+	if (modrinthResult.status === "fulfilled") {
+		modrinthByHash = modrinthResult.value
+	} else {
+		if (modrinthResult.reason?.tooManyRequests) {
+			throw modrinthResult.reason
+		}
+		lookupErrors.push(`Modrinth: ${modrinthResult.reason.message}`)
+	}
+	if (curseForgeResult.status === "fulfilled") {
+		curseForgeByHash = curseForgeResult.value
+	} else {
+		lookupErrors.push(`CurseForge: ${curseForgeResult.reason.message}`)
 	}
 	return files.map(file => ({
 		...file,
 		lyuwenhanExtensions: lyuwenhanExtensionsByHash.get(file.sha1) || null,
 		modrinth: lyuwenhanExtensionsByHash.has(file.sha1) ? null : modrinthByHash.get(file.sha1) || null,
+		curseforge: lyuwenhanExtensionsByHash.has(file.sha1) ? null : curseForgeByHash.get(file.sha1) || null,
 		lookupErrors
 	}))
 }
@@ -368,11 +523,17 @@ function acceptableRelease(type, minimum) {
 }
 async function findLyuwenhanExtensionsDownload(item, preferences, useCache) {
 	const id = item.lyuwenhanExtensions?.id;
-	if (!id || !preferences.gameVersion) return null;
+	if (!id || !preferences.gameVersion) {
+		return null
+	}
 	const data = await lyuwenhanExtensionsRequest(useCache);
-	if (data?.data?.ext !== "jar") return null;
+	if (data?.data?.ext !== "jar") {
+		return null
+	}
 	const version = data?.data?.["newest-version"]?.[id]?.[preferences.gameVersion];
-	if (typeof version !== "string" || !version) return null;
+	if (typeof version !== "string" || !version) {
+		return null
+	}
 	let sha1 = "";
 	for (const [hash, entry] of Object.entries(data?.data?.sha1 || {})) {
 		if (entry?.id === id && entry?.version === version) {
@@ -393,9 +554,43 @@ async function findLyuwenhanExtensionsDownload(item, preferences, useCache) {
 		versionName: version
 	}
 }
+
+function curseForgeModLoaderType(loader) {
+	const normalized = String(loader || "").trim().toLocaleLowerCase();
+	if (normalized === "forge") {
+		return 1
+	}
+	if (normalized === "fabric") {
+		return 4
+	}
+	if (normalized === "quilt") {
+		return 5
+	}
+	if (normalized === "neoforge") {
+		return 6
+	}
+	return null
+}
+
+function curseForgeReleaseTypeName(releaseType) {
+	if (releaseType === 1) {
+		return "release"
+	}
+	if (releaseType === 2) {
+		return "beta"
+	}
+	return "alpha"
+}
+
+function curseForgeSha1(file) {
+	const hash = (file?.hashes || []).find(entry => entry?.algo === 1 && typeof entry.value === "string" && /^[a-fA-F0-9]{40}$/.test(entry.value));
+	return hash?.value?.toLowerCase() || ""
+}
 async function findModrinthDownload(item, preferences, useCache) {
 	const projectId = item.modrinth?.version?.project_id;
-	if (!projectId) return null;
+	if (!projectId) {
+		return null
+	}
 	const params = new URLSearchParams({
 		loaders: JSON.stringify([preferences.loader]),
 		game_versions: JSON.stringify([preferences.gameVersion]),
@@ -406,9 +601,13 @@ async function findModrinthDownload(item, preferences, useCache) {
 		useCache
 	});
 	const version = versions?.find(entry => acceptableRelease(entry.version_type, preferences.minimumRelease));
-	if (!version) return null;
+	if (!version) {
+		return null
+	}
 	const file = version.files.find(entry => entry.primary) || version.files[0];
-	if (!file) return null;
+	if (!file) {
+		return null
+	}
 	return {
 		provider: "modrinth",
 		projectId,
@@ -422,6 +621,38 @@ async function findModrinthDownload(item, preferences, useCache) {
 		versionName: version.version_number || version.name
 	}
 }
+async function findCurseForgeDownload(item, preferences, useCache) {
+	const modId = item.curseforge?.mod?.id || item.curseforge?.file?.modId || item.curseforge?.match?.id;
+	const modLoaderType = curseForgeModLoaderType(preferences.loader);
+	if (!modId || !preferences.gameVersion || !modLoaderType) {
+		return null
+	}
+	const params = new URLSearchParams({
+		gameVersion: preferences.gameVersion,
+		modLoaderType: String(modLoaderType)
+	});
+	const response = await apiRequest({
+		url: `${CURSEFORGE_PROXY_BASE}/mods/${encodeURIComponent(modId)}/files?${params}`,
+		useCache
+	});
+	const files = Array.isArray(response?.data) ? response.data : [];
+	const file = files.find(entry => entry?.isAvailable !== false && typeof entry.downloadUrl === "string" && entry.downloadUrl && acceptableRelease(curseForgeReleaseTypeName(entry.releaseType), preferences.minimumRelease));
+	if (!file) {
+		return null
+	}
+	return {
+		provider: "curseforge",
+		projectId: String(modId),
+		projectSlug: item.curseforge?.mod?.slug || String(modId),
+		gameVersion: preferences.gameVersion,
+		loader: preferences.loader,
+		fileName: file.fileName,
+		url: file.downloadUrl,
+		sha1: curseForgeSha1(file),
+		sha512: "",
+		versionName: file.displayName || file.fileName
+	}
+}
 
 function safeFileName(name) {
 	return path.basename(name).replace(/[<>:"/\\|?*\x00-\x1F]/g, "_")
@@ -432,7 +663,9 @@ function safeNamePart(value) {
 }
 
 function plannedDownloadFileName(download) {
-	if (download.provider === "lyuwenhan") return safeFileName(download.fileName);
+	if (download.provider === "lyuwenhan") {
+		return safeFileName(download.fileName)
+	}
 	const project = safeNamePart(download.projectSlug || download.projectId);
 	const gameVersion = safeNamePart(download.gameVersion);
 	const loader = safeNamePart(download.loader);
@@ -443,8 +676,15 @@ function plannedDownloadFileName(download) {
 function validDownloadUrl(download) {
 	try {
 		const parsed = new URL(download.url);
-		if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.hash) return false;
-		if (download.provider === "modrinth") return download.url.startsWith(MODRINTH_CDN_PREFIX) && !download.url.includes("..");
+		if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.hash) {
+			return false
+		}
+		if (download.provider === "modrinth") {
+			return download.url.startsWith(MODRINTH_CDN_PREFIX) && !download.url.includes("..")
+		}
+		if (download.provider === "curseforge") {
+			return parsed.hostname === CURSEFORGE_DOWNLOAD_HOST && parsed.pathname.startsWith("/files/") && !parsed.pathname.includes("..")
+		}
 		if (download.provider === "lyuwenhan") {
 			return parsed.hostname === "lyuwenhan.github.io" && parsed.pathname.startsWith(LYUWENHAN_EXTENSIONS_DIST_PREFIX) && !parsed.pathname.includes("..")
 		}
@@ -455,10 +695,18 @@ function validDownloadUrl(download) {
 }
 
 function validateDownloadMetadata(download) {
-	if (!download?.url || !validDownloadUrl(download)) throw new Error("Invalid download URL");
-	if (!isJarPath(download.fileName || "")) throw new Error("Downloaded file metadata is not a JAR");
-	if (!isJarPath(plannedDownloadFileName(download))) throw new Error("Planned file name is not a JAR");
-	if (download.provider === "modrinth" && !download.sha1 && !download.sha512) throw new Error("Downloaded file has no hash metadata")
+	if (!download?.url || !validDownloadUrl(download)) {
+		throw new Error("Invalid download URL")
+	}
+	if (!isJarPath(download.fileName || "")) {
+		throw new Error("Downloaded file metadata is not a JAR")
+	}
+	if (!isJarPath(plannedDownloadFileName(download))) {
+		throw new Error("Planned file name is not a JAR")
+	}
+	if ((download.provider === "modrinth" || download.provider === "curseforge") && !download.sha1 && !download.sha512) {
+		throw new Error("Downloaded file has no hash metadata")
+	}
 }
 
 function hashVerifier(download) {
@@ -466,13 +714,21 @@ function hashVerifier(download) {
 	const sha512 = download.sha512 ? crypto.createHash("sha512") : null;
 	return new Transform({
 		transform(chunk, _encoding, callback) {
-			if (sha1) sha1.update(chunk);
-			if (sha512) sha512.update(chunk);
+			if (sha1) {
+				sha1.update(chunk)
+			}
+			if (sha512) {
+				sha512.update(chunk)
+			}
 			callback(null, chunk)
 		},
 		flush(callback) {
-			if (sha1 && sha1.digest("hex") !== download.sha1) return callback(new Error("SHA-1 hash mismatch"));
-			if (sha512 && sha512.digest("hex") !== download.sha512) return callback(new Error("SHA-512 hash mismatch"));
+			if (sha1 && sha1.digest("hex") !== download.sha1) {
+				return callback(new Error("SHA-1 hash mismatch"))
+			}
+			if (sha512 && sha512.digest("hex") !== download.sha512) {
+				return callback(new Error("SHA-512 hash mismatch"))
+			}
 			callback()
 		}
 	})
@@ -490,7 +746,9 @@ async function downloadFile(download, directory) {
 			signal: controller.signal
 		})
 	} catch (error) {
-		if (download.provider === "modrinth" && (modrinthRequestsBlocked || error.name === "AbortError")) throw new TooManyRequestsError;
+		if (download.provider === "modrinth" && (modrinthRequestsBlocked || error.name === "AbortError")) {
+			throw new TooManyRequestsError
+		}
 		throw error
 	} finally {
 		activeFetchControllers.delete(controller)
@@ -499,8 +757,12 @@ async function downloadFile(download, directory) {
 		abortActiveFetches();
 		throw new TooManyRequestsError
 	}
-	if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-	if (!response.body) throw new Error("Empty download body");
+	if (!response.ok) {
+		throw new Error(`${response.status} ${response.statusText}`)
+	}
+	if (!response.body) {
+		throw new Error("Empty download body")
+	}
 	const finalPath = path.resolve(directory, plannedDownloadFileName(download));
 	const tempPath = `${finalPath}.download`;
 	try {
@@ -551,7 +813,9 @@ async function addAutoFilterToWorkbook(filePath, filterRange) {
 	const zip = await JSZip.loadAsync(workbookBuffer);
 	const worksheetPath = "xl/worksheets/sheet1.xml";
 	const worksheetFile = zip.file(worksheetPath);
-	if (!worksheetFile) throw new Error("Summary worksheet XML not found");
+	if (!worksheetFile) {
+		throw new Error("Summary worksheet XML not found")
+	}
 	let worksheetXml = await worksheetFile.async("string");
 	worksheetXml = worksheetXml.replace(/<autoFilter\b[^>]*\/>/g, "").replace(/<autoFilter\b[\s\S]*?<\/autoFilter>/g, "");
 	if (!worksheetXml.includes("</sheetData>")) {
@@ -575,7 +839,9 @@ async function exportSummaryWorkbook({
 	targetLoader,
 	items
 }) {
-	if (!Array.isArray(items) || !items.length) throw new Error("No files imported");
+	if (!Array.isArray(items) || !items.length) {
+		throw new Error("No files imported")
+	}
 	const result = await dialog.showSaveDialog({
 		title: "Export summary",
 		defaultPath: "minecraft-mod-updater-summary.xlsx",
@@ -584,9 +850,11 @@ async function exportSummaryWorkbook({
 			extensions: ["xlsx"]
 		}]
 	});
-	if (result.canceled || !result.filePath) return {
-		canceled: true
-	};
+	if (result.canceled || !result.filePath) {
+		return {
+			canceled: true
+		}
+	}
 	const workbook = await XlsxPopulate.fromBlankAsync();
 	const worksheet = workbook.sheet(0);
 	worksheet.name("Summary");
@@ -721,9 +989,13 @@ app.whenReady().then(() => {
 				extensions: ["jar"]
 			}]
 		};
-		if (defaultPath) dialogOptions.defaultPath = defaultPath;
+		if (defaultPath) {
+			dialogOptions.defaultPath = defaultPath
+		}
 		const result = await dialog.showOpenDialog(dialogOptions);
-		if (result.canceled) return [];
+		if (result.canceled) {
+			return []
+		}
 		const filePaths = await existingJarPaths(result.filePaths);
 		if (filePaths[0]) {
 			await writeSettings({
@@ -740,9 +1012,13 @@ app.whenReady().then(() => {
 			title: "Import mods from folder",
 			properties: ["openDirectory"]
 		};
-		if (defaultPath) dialogOptions.defaultPath = defaultPath;
+		if (defaultPath) {
+			dialogOptions.defaultPath = defaultPath
+		}
 		const result = await dialog.showOpenDialog(dialogOptions);
-		if (result.canceled || !result.filePaths[0]) return [];
+		if (result.canceled || !result.filePaths[0]) {
+			return []
+		}
 		const directory = result.filePaths[0];
 		await writeSettings({
 			...settings,
@@ -783,20 +1059,52 @@ app.whenReady().then(() => {
 		const output = [];
 		for (const item of items) {
 			let download = null;
+			let modrinthDownload = null;
+			let curseforgeDownload = null;
 			let downloadError = "";
+			const errors = [];
 			try {
-				if (item.lyuwenhanExtensions) download = await findLyuwenhanExtensionsDownload(item, preferences, useCache);
-				else if (item.modrinth) download = await findModrinthDownload(item, preferences, useCache)
+				if (item.lyuwenhanExtensions) {
+					download = await findLyuwenhanExtensionsDownload(item, preferences, useCache)
+				} else {
+					const checks = [];
+					if (item.modrinth) {
+						checks.push(findModrinthDownload(item, preferences, useCache).then(result => {
+							modrinthDownload = result
+						}).catch(error => {
+							if (error?.tooManyRequests) {
+								throw error
+							}
+							errors.push(`Modrinth: ${getErrorMessage(error)}`)
+						}))
+					}
+					if (item.curseforge) {
+						checks.push(findCurseForgeDownload(item, preferences, useCache).then(result => {
+							curseforgeDownload = result
+						}).catch(error => {
+							errors.push(`CurseForge: ${getErrorMessage(error)}`)
+						}))
+					}
+					await Promise.all(checks);
+					download = modrinthDownload || curseforgeDownload
+				}
 			} catch (error) {
-				if (error?.tooManyRequests) throw error;
+				if (error?.tooManyRequests) {
+					throw error
+				}
 				download = null;
-				downloadError = `${item.lyuwenhanExtensions?"Lyuwenhan Extensions":"Modrinth"}: ${getErrorMessage(error)}`
+				modrinthDownload = null;
+				curseforgeDownload = null;
+				errors.push(`${item.lyuwenhanExtensions?"Lyuwenhan Extensions":"Download"}: ${getErrorMessage(error)}`)
 			}
+			downloadError = errors.join("\n");
 			output.push({
 				download,
 				downloadError,
-				modrinthDownload: download?.provider === "modrinth" ? download : null,
-				modrinthError: ""
+				modrinthDownload,
+				modrinthError: "",
+				curseforgeDownload,
+				curseforgeError: ""
 			})
 		}
 		return output
@@ -811,12 +1119,16 @@ app.whenReady().then(() => {
 			title: "Select download location",
 			properties: ["openDirectory", "createDirectory"]
 		};
-		if (defaultPath) dialogOptions.defaultPath = defaultPath;
+		if (defaultPath) {
+			dialogOptions.defaultPath = defaultPath
+		}
 		const result = await dialog.showOpenDialog(dialogOptions);
-		if (result.canceled || !result.filePaths[0]) return {
-			canceled: true,
-			results: []
-		};
+		if (result.canceled || !result.filePaths[0]) {
+			return {
+				canceled: true,
+				results: []
+			}
+		}
 		const directory = path.resolve(result.filePaths[0]);
 		await writeSettings({
 			...settings,
@@ -833,10 +1145,12 @@ app.whenReady().then(() => {
 				message: "The selected folder is not empty.",
 				detail: "Continuing will clear the folder before downloading. Continue?"
 			});
-			if (confirmation.response !== 0) return {
-				canceled: true,
-				results: []
-			};
+			if (confirmation.response !== 0) {
+				return {
+					canceled: true,
+					results: []
+				}
+			}
 			await clearDirectory(directory)
 		}
 		const results = [];
@@ -847,7 +1161,9 @@ app.whenReady().then(() => {
 					ok: true
 				})
 			} catch (error) {
-				if (error?.tooManyRequests) throw error;
+				if (error?.tooManyRequests) {
+					throw error
+				}
 				results.push({
 					ok: false
 				})
@@ -861,15 +1177,21 @@ app.whenReady().then(() => {
 	ipcMain.handle("summary:export", async (_event, payload) => exportSummaryWorkbook(payload));
 	ipcMain.handle("shell:open-external", (_event, url) => {
 		const parsed = new URL(url);
-		if (!["https:", "http:"].includes(parsed.protocol)) throw new Error("Unsupported URL protocol");
+		if (!["https:", "http:"].includes(parsed.protocol)) {
+			throw new Error("Unsupported URL protocol")
+		}
 		return shell.openExternal(parsed.toString())
 	});
 	createWindow();
 	setupAutoUpdater();
 	app.on("activate", () => {
-		if (BrowserWindow.getAllWindows().length === 0) createWindow()
+		if (BrowserWindow.getAllWindows().length === 0) {
+			createWindow()
+		}
 	})
 });
 app.on("window-all-closed", () => {
-	if (process.platform !== "darwin") app.quit()
+	if (process.platform !== "darwin") {
+		app.quit()
+	}
 });

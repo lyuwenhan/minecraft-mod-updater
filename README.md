@@ -8,7 +8,7 @@ Instead of checking every mod manually, import your existing mods, choose your t
 
 - Import individual mod files
 - Import all mod files from a folder
-- Automatically identify supported mods from [Modrinth](https://modrinth.com) and [lyuwenhan/minecraft-java-edition-mods](https://github.com/lyuwenhan/minecraft-java-edition-mods)
+- Automatically identify supported mods from [Modrinth](https://modrinth.com), [CurseForge](https://www.curseforge.com/minecraft), and [lyuwenhan/minecraft-java-edition-mods](https://github.com/lyuwenhan/minecraft-java-edition-mods)
 - Search for versions compatible with your target Minecraft version
 - Support Fabric, Forge, NeoForge, Quilt, and other available loaders
 - Choose between release, beta, and alpha versions
@@ -20,6 +20,14 @@ Instead of checking every mod manually, import your existing mods, choose your t
 - Filter exported results by availability
 - Remember recently used folders
 - Automatically check for application updates with options to update now, update later, or skip a version
+
+## Supported Mod Sources
+
+Minecraft Mod Updater can identify and search mods from:
+
+- [lyuwenhan/minecraft-java-edition-mods](https://github.com/lyuwenhan/minecraft-java-edition-mods)
+- [Modrinth](https://modrinth.com)
+- [CurseForge](https://www.curseforge.com/minecraft/mc-mods)
 
 ## Supported Platforms
 
@@ -126,7 +134,7 @@ The portable version does not update itself automatically.
 
 ## Notes
 
-Minecraft Mod Updater can only provide versions that are available from supported mod sources, including [Modrinth](https://modrinth.com) and [lyuwenhan/minecraft-java-edition-mods](https://github.com/lyuwenhan/minecraft-java-edition-mods).
+Minecraft Mod Updater can only provide versions that are available from supported mod sources, including [Modrinth](https://modrinth.com), [CurseForge](https://www.curseforge.com/minecraft/mc-mods),  and [lyuwenhan/minecraft-java-edition-mods](https://github.com/lyuwenhan/minecraft-java-edition-mods).
 
 Some mods may not be identified or may not have a version compatible with your selected:
 
@@ -196,6 +204,6 @@ Minecraft Mod Updater helps you find available versions, but it cannot guarantee
 
 ## Disclaimer
 
-Minecraft Mod Updater is not affiliated with or endorsed by Mojang Studios, Microsoft, Modrinth, or individual mod authors unless explicitly stated otherwise.
+Minecraft Mod Updater is not affiliated with or endorsed by Mojang Studios, Microsoft, Modrinth, CurseForge, Overwolf, or individual mod authors unless explicitly stated otherwise.
 
 Minecraft is a trademark of Microsoft and/or Mojang Studios.
