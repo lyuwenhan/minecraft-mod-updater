@@ -41,6 +41,9 @@ button, input, select {
 	flex: 1 0 0;
 	min-width: 0
 }
+#target-loader:not(:has(>option[value=other]:checked)) + #target-loader-custom, #target-version-select:not(:has(>option[value=other]:checked)) + #target-version {
+	display: none
+}
 .toolbar {
 	display: flex;
 	flex-direction: column;
