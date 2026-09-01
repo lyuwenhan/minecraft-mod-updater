@@ -690,7 +690,10 @@ function setupAutoUpdater() {
 		}
 	});
 	autoUpdater.on("update-downloaded", () => {
-		autoUpdater.quitAndInstall()
+		autoUpdater.quitAndInstall({
+			isSilent: true,
+			isForceRunAfter: true
+		})
 	});
 	autoUpdater.on("error", error => {
 		console.error("Auto update failed:", error.message)
