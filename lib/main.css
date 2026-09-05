@@ -83,10 +83,8 @@ button:disabled {
 .file-title b {
 	color: red
 }
-.error, .provider-unavailable:after {
-	color: #c33
-}
 .error {
+	color: #c33;
 	white-space: pre-wrap
 }
 .empty, .muted {
@@ -134,30 +132,27 @@ button:disabled {
 	background-image: url(favicon.png)
 }
 .provider-status:after {
-	align-items: center;
 	background: #fff;
+	background-position: 50%;
+	background-repeat: no-repeat;
+	background-size: contain;
 	border: 1px solid;
 	border-radius: 50%;
 	bottom: 0;
 	content: "";
-	display: flex;
-	font-family: Arial, sans-serif;
-	font-size: 11px;
-	font-weight: 800;
 	height: 16px;
-	justify-content: center;
-	line-height: 1;
 	position: absolute;
 	right: 0;
 	transform: translate(50%, 50%);
 	width: 16px
 }
 .provider-available:after {
-	color: #278447;
-	content: "✓"
+	background-image: url(icons/available.svg);
+	color: #278447
 }
 .provider-unavailable:after {
-	content: "×"
+	background-image: url(icons/unavailable.svg);
+	color: #c33
 }
 .file-header {
 	align-items: center;
