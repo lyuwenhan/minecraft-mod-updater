@@ -2,25 +2,67 @@
 	font-family: Consolas, Courier, monospace
 }
 body {
-	display: flex;
-	flex-direction: column;
-	gap: 14px;
+	margin: 0;
 	padding: 20px
 }
-body, body > h1 {
+#main, #settings {
+	display: flex;
+	flex-direction: column;
+	gap: 14px
+}
+#main > h1, #settings > h1 {
 	margin: 0
+}
+#settings-button {
+	cursor: pointer;
+	height: 32px;
+	position: absolute;
+	right: 20px;
+	top: 20px;
+	width: 32px
+}
+#settings-toggle {
+	display: none
+}
+#settings-button:before {
+	background: url(settings.svg) 50%/contain no-repeat;
+	content: "";
+	display: block;
+	height: 100%;
+	width: 100%
+}
+#settings-button:hover:before {
+	opacity: .7
+}
+#settings-button:active:before {
+	opacity: .8
+}
+#settings-button:has(#settings-toggle:checked):before {
+	opacity: .8
+}
+#settings-button:has(#settings-toggle:checked):hover:before {
+	opacity: .5
+}
+#settings-button:has(#settings-toggle:checked):active:before {
+	opacity: .6
+}
+body:has(#settings-toggle:checked) #main {
+	display: none
+}
+body:not(:has(#settings-toggle:checked)) #settings {
+	display: none
 }
 .panel {
 	border: 1px solid #aaa;
 	border-radius: 8px;
 	padding: 12px
 }
-.search-filter, .settings {
+.search-filter, .settings-panel {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 12px
 }
-.search-filter > *, .settings > * {
+.field-label, .search-filter > * {
 	flex: 1 0 0;
 	white-space: nowrap
 }
@@ -66,6 +108,9 @@ button:disabled {
 #status {
 	min-height: 1.4em;
 	white-space: pre-wrap
+}
+#status:empty {
+	display: none
 }
 #operation-panel, .file-card {
 	display: flex;
