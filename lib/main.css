@@ -24,7 +24,7 @@ body, body > h1 {
 	flex: 1 0 0;
 	white-space: nowrap
 }
-label {
+.field-label {
 	display: flex;
 	flex-direction: column;
 	gap: 5px

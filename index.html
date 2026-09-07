@@ -14,14 +14,14 @@
 		<h1>Minecraft Mod Updater</h1>
 		<span>Import local JAR files, identify them, and download compatible versions.</span>
 		<div class="settings panel">
-			<label>Target Game Version <span class="select-with-custom">
+			<span class="field-label">Target Game Version <span class="select-with-custom">
 					<select id="target-version-select">
 						<option value="other">Other</option>
 					</select>
 					<input id="target-version" placeholder="Game version">
 				</span>
-			</label>
-			<label>Target Loader <span class="select-with-custom">
+			</span>
+			<span class="field-label">Target Loader <span class="select-with-custom">
 					<select id="target-loader">
 						<option value="other">Other</option>
 						<option value="fabric">Fabric</option>
@@ -31,13 +31,13 @@
 					</select>
 					<input id="target-loader-custom" placeholder="loader">
 				</span>
-			</label>
-			<label>Minimum Release Level <select id="minimum-release">
+			</span>
+			<span class="field-label">Minimum Release Level <select id="minimum-release">
 					<option value="release">Release only</option>
 					<option value="beta">Beta or release</option>
 					<option value="alpha">Alpha, beta, or release</option>
 				</select>
-			</label>
+			</span>
 		</div>
 		<div class="toolbar panel">
 			<div class="toolbar-row">
@@ -53,9 +53,9 @@
 		</div>
 		<div id="status" role="status" aria-live="polite"></div>
 		<div class="search-filter panel">
-			<label>Search <input id="search-query" placeholder="Name or JAR name">
-			</label>
-			<label>Filter <span class="select-with-custom">
+			<span class="field-label">Search <input id="search-query" placeholder="Name or JAR name">
+			</span>
+			<span class="field-label">Filter <span class="select-with-custom">
 					<select id="source-filter">
 						<option value="all">Source: All</option>
 						<option value="found">Source: Found</option>
@@ -67,7 +67,7 @@
 						<option value="not-found">Target: Not Found</option>
 					</select>
 				</span>
-			</label>
+			</span>
 		</div>
 		<div id="operation-panel"></div>
 		<script src="lib/main.js"></script>
