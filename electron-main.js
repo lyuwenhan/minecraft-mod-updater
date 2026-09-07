@@ -521,6 +521,26 @@ function acceptableRelease(type, minimum) {
 	};
 	return rank[type] >= rank[minimum]
 }
+
+function findReleaseWithFallback(entries, getReleaseType, minimum, allowFallback) {
+	const availableEntries = Array.isArray(entries) ? entries : [];
+	const strictMatch = availableEntries.find(entry => acceptableRelease(getReleaseType(entry), minimum));
+	if (strictMatch || !allowFallback) {
+		return strictMatch
+	}
+	const levels = ["alpha", "beta", "release"];
+	const minimumIndex = levels.indexOf(minimum);
+	if (minimumIndex <= 0) {
+		return null
+	}
+	for (let index = minimumIndex - 1; index >= 0; index--) {
+		const fallbackMatch = availableEntries.find(entry => acceptableRelease(getReleaseType(entry), levels[index]));
+		if (fallbackMatch) {
+			return fallbackMatch
+		}
+	}
+	return null
+}
 async function findLyuwenhanExtensionsDownload(item, preferences, useCache) {
 	const id = item.lyuwenhanExtensions?.id;
 	if (!id || !preferences.gameVersion) {
@@ -600,7 +620,7 @@ async function findModrinthDownload(item, preferences, useCache) {
 		url: `${MODRINTH_API}/project/${encodeURIComponent(projectId)}/version?${params}`,
 		useCache
 	});
-	const version = versions?.find(entry => acceptableRelease(entry.version_type, preferences.minimumRelease));
+	const version = findReleaseWithFallback(versions, entry => entry.version_type, preferences.minimumRelease, preferences.releaseLevelFallback === true);
 	if (!version) {
 		return null
 	}
@@ -636,7 +656,8 @@ async function findCurseForgeDownload(item, preferences, useCache) {
 		useCache
 	});
 	const files = Array.isArray(response?.data) ? response.data : [];
-	const file = files.find(entry => entry?.isAvailable !== false && typeof entry.downloadUrl === "string" && entry.downloadUrl && acceptableRelease(curseForgeReleaseTypeName(entry.releaseType), preferences.minimumRelease));
+	const availableFiles = files.filter(entry => entry?.isAvailable !== false && typeof entry.downloadUrl === "string" && entry.downloadUrl);
+	const file = findReleaseWithFallback(availableFiles, entry => curseForgeReleaseTypeName(entry.releaseType), preferences.minimumRelease, preferences.releaseLevelFallback === true);
 	if (!file) {
 		return null
 	}
