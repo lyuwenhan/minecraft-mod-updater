@@ -50,6 +50,9 @@ async function writeSettings(settings) {
 	await fs.writeFile(settingsPath, JSON.stringify(settings, null, "\t"))
 }
 const sourcePreferenceKeys = new Set(["disable-lyuwenhan", "disable-modrinth", "disable-curseforge"]);
+const stringSettingKeys = new Set(["target-game-version", "target-loader", "minimum-release-level", "release-level-fallback", "skippedUpdateVersion"]);
+const booleanSettingKeys = new Set(sourcePreferenceKeys);
+const rendererSettingKeys = new Set([...stringSettingKeys, ...booleanSettingKeys]);
 let settingsUpdateQueue = Promise.resolve();
 
 function updateSettings(updater) {
@@ -61,6 +64,31 @@ function updateSettings(updater) {
 	});
 	settingsUpdateQueue = operation.catch(() => {});
 	return operation
+}
+async function getSettings() {
+	const settings = await readSettings();
+	const output = {};
+	for (const key of rendererSettingKeys) {
+		if (Object.prototype.hasOwnProperty.call(settings, key)) {
+			output[key] = settings[key]
+		}
+	}
+	return output
+}
+async function setSetting(key, value) {
+	if (!rendererSettingKeys.has(key)) {
+		throw new Error("Unsupported setting")
+	}
+	if (stringSettingKeys.has(key) && typeof value !== "string") {
+		throw new Error("Setting value must be a string")
+	}
+	if (booleanSettingKeys.has(key) && typeof value !== "boolean") {
+		throw new Error("Setting value must be a boolean")
+	}
+	await updateSettings(settings => ({
+		...settings,
+		[key]: value
+	}))
 }
 async function getSourcePreferences() {
 	const settings = await readSettings();
@@ -76,13 +104,7 @@ async function setSourcePreference(key, value) {
 	if (!sourcePreferenceKeys.has(key)) {
 		throw new Error("Unsupported source preference")
 	}
-	if (typeof value !== "boolean") {
-		throw new Error("Source preference value must be boolean")
-	}
-	await updateSettings(settings => ({
-		...settings,
-		[key]: value
-	}))
+	await setSetting(key, value)
 }
 async function getExistingDirectory(directory) {
 	if (!directory) {
@@ -1087,6 +1109,8 @@ function setupAutoUpdater() {
 	checkForUpdates()
 }
 app.whenReady().then(() => {
+	ipcMain.handle("settings:get", async () => getSettings());
+	ipcMain.handle("settings:set", async (_event, key, value) => setSetting(key, value));
 	ipcMain.handle("settings:get-source-preferences", async () => getSourcePreferences());
 	ipcMain.handle("settings:set-source-preference", async (_event, key, value) => setSourcePreference(key, value));
 	if (app.isPackaged) {
