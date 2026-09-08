@@ -49,6 +49,41 @@ async function writeSettings(settings) {
 	});
 	await fs.writeFile(settingsPath, JSON.stringify(settings, null, "\t"))
 }
+const sourcePreferenceKeys = new Set(["disable-lyuwenhan", "disable-modrinth", "disable-curseforge"]);
+let settingsUpdateQueue = Promise.resolve();
+
+function updateSettings(updater) {
+	const operation = settingsUpdateQueue.then(async () => {
+		const settings = await readSettings();
+		const updatedSettings = updater(settings);
+		await writeSettings(updatedSettings);
+		return updatedSettings
+	});
+	settingsUpdateQueue = operation.catch(() => {});
+	return operation
+}
+async function getSourcePreferences() {
+	const settings = await readSettings();
+	const preferences = {};
+	for (const key of sourcePreferenceKeys) {
+		if (Object.prototype.hasOwnProperty.call(settings, key)) {
+			preferences[key] = settings[key] === true
+		}
+	}
+	return preferences
+}
+async function setSourcePreference(key, value) {
+	if (!sourcePreferenceKeys.has(key)) {
+		throw new Error("Unsupported source preference")
+	}
+	if (typeof value !== "boolean") {
+		throw new Error("Source preference value must be boolean")
+	}
+	await updateSettings(settings => ({
+		...settings,
+		[key]: value
+	}))
+}
 async function getExistingDirectory(directory) {
 	if (!directory) {
 		return undefined
@@ -949,7 +984,6 @@ async function exportSummaryWorkbook({
 function autoUpdatesSupported() {
 	return app.isPackaged && !(process.platform === "win32" && process.env.PORTABLE_EXECUTABLE_DIR)
 }
-
 async function showManualUpdateCheckResult() {
 	if (!autoUpdatesSupported()) {
 		await dialog.showMessageBox({
@@ -1053,6 +1087,8 @@ function setupAutoUpdater() {
 	checkForUpdates()
 }
 app.whenReady().then(() => {
+	ipcMain.handle("settings:get-source-preferences", async () => getSourcePreferences());
+	ipcMain.handle("settings:set-source-preference", async (_event, key, value) => setSourcePreference(key, value));
 	if (app.isPackaged) {
 		Menu.setApplicationMenu(null)
 	}
@@ -1143,9 +1179,7 @@ app.whenReady().then(() => {
 	}) => {
 		resetModrinthRequestBlock();
 		const {
-			disableLyuwenhan = false,
-			disableModrinth = false,
-			disableCurseForge = false
+			disableLyuwenhan = false, disableModrinth = false, disableCurseForge = false
 		} = disabledSources;
 		const output = [];
 		for (const item of items) {
