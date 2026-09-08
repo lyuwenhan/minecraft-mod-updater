@@ -1,4 +1,4 @@
 {
-	"needsUpdate": false,
-	"description": ""
+	"needsUpdate": true,
+	"description": "Add update button\nAdd ignore source options."
 }

@@ -46,7 +46,7 @@ body {
 #settings-button:has(#settings-toggle:checked):active:before {
 	opacity: .6
 }
-body:has(#settings-toggle:checked) #main，body:not(:has(#settings-toggle:checked)) #settings {
+body:has(#settings-toggle:checked) #main, body:not(:has(#settings-toggle:checked)) #settings {
 	display: none
 }
 .panel {
