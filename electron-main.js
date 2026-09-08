@@ -1195,6 +1195,21 @@ app.whenReady().then(() => {
 		const files = await Promise.all(jarPaths.map(filePath => readJar(filePath)));
 		return enrichFiles(files, false, disabledSources)
 	});
+	ipcMain.handle("mods:refresh-sources", async (_event, {
+		items,
+		disabledSources = {}
+	}) => {
+		resetModrinthRequestBlock();
+		const existingPaths = new Set(await existingJarPaths(items.map(item => item.path)));
+		const files = items.filter(item => existingPaths.has(item.path)).map(item => ({
+			path: item.path,
+			fileName: item.fileName,
+			size: item.size,
+			sha1: item.sha1,
+			curseForgeFingerprint: item.curseForgeFingerprint
+		}));
+		return enrichFiles(files, true, disabledSources)
+	});
 	ipcMain.handle("mods:check-downloads", async (_event, {
 		items,
 		preferences,

@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	selectFolderJars: () => ipcRenderer.invoke("folder:select-jars"),
 	importMods: payload => ipcRenderer.invoke("mods:import", payload),
 	reloadMods: payload => ipcRenderer.invoke("mods:reload", payload),
+	refreshSources: payload => ipcRenderer.invoke("mods:refresh-sources", payload),
 	checkDownloads: payload => ipcRenderer.invoke("mods:check-downloads", payload),
 	getGameVersions: () => ipcRenderer.invoke("modrinth:game-versions"),
 	checkForUpdates: () => ipcRenderer.invoke("updates:check"),
