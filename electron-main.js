@@ -479,18 +479,24 @@ function uniqueFilesByProviderId(items, knownProviderIds = []) {
 	}
 	return unique
 }
-async function enrichFiles(files, useCache) {
+async function enrichFiles(files, useCache, {
+	disableLyuwenhan = false,
+	disableModrinth = false,
+	disableCurseForge = false
+} = {}) {
 	const lookupErrors = [];
 	let lyuwenhanExtensionsByHash = new Map;
-	try {
-		lyuwenhanExtensionsByHash = await lookupLyuwenhanExtensionsBatch(files, useCache)
-	} catch (error) {
-		lookupErrors.push(`Lyuwenhan Extensions: ${error.message}`)
+	if (!disableLyuwenhan) {
+		try {
+			lyuwenhanExtensionsByHash = await lookupLyuwenhanExtensionsBatch(files, useCache)
+		} catch (error) {
+			lookupErrors.push(`Lyuwenhan Extensions: ${error.message}`)
+		}
 	}
 	const fallbackFiles = files.filter(file => !lyuwenhanExtensionsByHash.has(file.sha1));
 	let modrinthByHash = new Map;
 	let curseForgeByHash = new Map;
-	const [modrinthResult, curseForgeResult] = await Promise.allSettled([lookupModrinthBatch(fallbackFiles, useCache), lookupCurseForgeBatch(fallbackFiles, useCache)]);
+	const [modrinthResult, curseForgeResult] = await Promise.allSettled([disableModrinth ? Promise.resolve(new Map) : lookupModrinthBatch(fallbackFiles, useCache), disableCurseForge ? Promise.resolve(new Map) : lookupCurseForgeBatch(fallbackFiles, useCache)]);
 	if (modrinthResult.status === "fulfilled") {
 		modrinthByHash = modrinthResult.value
 	} else {
@@ -506,9 +512,9 @@ async function enrichFiles(files, useCache) {
 	}
 	return files.map(file => ({
 		...file,
-		lyuwenhanExtensions: lyuwenhanExtensionsByHash.get(file.sha1) || null,
-		modrinth: lyuwenhanExtensionsByHash.has(file.sha1) ? null : modrinthByHash.get(file.sha1) || null,
-		curseforge: lyuwenhanExtensionsByHash.has(file.sha1) ? null : curseForgeByHash.get(file.sha1) || null,
+		lyuwenhanExtensions: disableLyuwenhan ? null : lyuwenhanExtensionsByHash.get(file.sha1) || null,
+		modrinth: disableModrinth || lyuwenhanExtensionsByHash.has(file.sha1) ? null : modrinthByHash.get(file.sha1) || null,
+		curseforge: disableCurseForge || lyuwenhanExtensionsByHash.has(file.sha1) ? null : curseForgeByHash.get(file.sha1) || null,
 		lookupErrors
 	}))
 }
@@ -940,11 +946,52 @@ async function exportSummaryWorkbook({
 	}
 }
 
-function setupAutoUpdater() {
-	if (!app.isPackaged) {
+function autoUpdatesSupported() {
+	return app.isPackaged && !(process.platform === "win32" && process.env.PORTABLE_EXECUTABLE_DIR)
+}
+
+async function showManualUpdateCheckResult() {
+	if (!autoUpdatesSupported()) {
+		await dialog.showMessageBox({
+			type: "info",
+			title: "Check for updates",
+			message: "Update checking is unavailable in this build."
+		});
 		return
 	}
-	if (process.platform === "win32" && process.env.PORTABLE_EXECUTABLE_DIR) {
+	try {
+		const result = await autoUpdater.checkForUpdates();
+		const latestVersion = result?.updateInfo?.version || "";
+		if (!latestVersion || latestVersion === app.getVersion()) {
+			await dialog.showMessageBox({
+				type: "info",
+				title: "Check for updates",
+				message: "You're up to date.",
+				detail: `Current version: v${app.getVersion()}`
+			});
+			return
+		}
+		const settings = await readSettings();
+		if (settings.skippedUpdateVersion === latestVersion) {
+			await dialog.showMessageBox({
+				type: "info",
+				title: "Check for updates",
+				message: `Minecraft Mod Updater v${latestVersion} is available.`,
+				detail: "This version is currently marked as skipped."
+			})
+		}
+	} catch (error) {
+		await dialog.showMessageBox({
+			type: "error",
+			title: "Check for updates",
+			message: "Failed to check for updates.",
+			detail: error.message
+		})
+	}
+}
+
+function setupAutoUpdater() {
+	if (!autoUpdatesSupported()) {
 		return
 	}
 	autoUpdater.autoDownload = false;
@@ -1013,6 +1060,7 @@ app.whenReady().then(() => {
 		resetModrinthRequestBlock();
 		return getGameVersions()
 	});
+	ipcMain.handle("updates:check", async () => showManualUpdateCheckResult());
 	ipcMain.handle("files:select", async () => {
 		const settings = await readSettings();
 		const defaultPath = await getExistingDirectory(settings.lastImportDirectory);
@@ -1067,30 +1115,38 @@ app.whenReady().then(() => {
 	ipcMain.handle("mods:import", async (_event, {
 		paths,
 		knownHashes = [],
-		knownProviderIds = []
+		knownProviderIds = [],
+		disabledSources = {}
 	}) => {
 		resetModrinthRequestBlock();
 		const jarPaths = await existingJarPaths(paths);
 		const files = uniqueFilesByHash(await Promise.all(jarPaths.map(filePath => readJar(filePath))), knownHashes);
-		const enriched = await enrichFiles(files, true);
+		const enriched = await enrichFiles(files, true, disabledSources);
 		return {
 			items: uniqueFilesByProviderId(enriched, knownProviderIds)
 		}
 	});
 	ipcMain.handle("mods:reload", async (_event, {
-		items
+		items,
+		disabledSources = {}
 	}) => {
 		resetModrinthRequestBlock();
 		const jarPaths = await existingJarPaths(items.map(item => item.path));
 		const files = await Promise.all(jarPaths.map(filePath => readJar(filePath)));
-		return enrichFiles(files, false)
+		return enrichFiles(files, false, disabledSources)
 	});
 	ipcMain.handle("mods:check-downloads", async (_event, {
 		items,
 		preferences,
-		useCache
+		useCache,
+		disabledSources = {}
 	}) => {
 		resetModrinthRequestBlock();
+		const {
+			disableLyuwenhan = false,
+			disableModrinth = false,
+			disableCurseForge = false
+		} = disabledSources;
 		const output = [];
 		for (const item of items) {
 			let download = null;
@@ -1099,11 +1155,11 @@ app.whenReady().then(() => {
 			let downloadError = "";
 			const errors = [];
 			try {
-				if (item.lyuwenhanExtensions) {
+				if (!disableLyuwenhan && item.lyuwenhanExtensions) {
 					download = await findLyuwenhanExtensionsDownload(item, preferences, useCache)
 				} else {
 					const checks = [];
-					if (item.modrinth) {
+					if (!disableModrinth && item.modrinth) {
 						checks.push(findModrinthDownload(item, preferences, useCache).then(result => {
 							modrinthDownload = result
 						}).catch(error => {
@@ -1113,7 +1169,7 @@ app.whenReady().then(() => {
 							errors.push(`Modrinth: ${getErrorMessage(error)}`)
 						}))
 					}
-					if (item.curseforge) {
+					if (!disableCurseForge && item.curseforge) {
 						checks.push(findCurseForgeDownload(item, preferences, useCache).then(result => {
 							curseforgeDownload = result
 						}).catch(error => {

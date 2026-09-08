@@ -14,6 +14,7 @@
 		<label id="settings-button"><input type="checkbox" id="settings-toggle"></label>
 		<div id="main">
 			<h1>Minecraft Mod Updater</h1>
+			<h2 id="no-sources-message" class="no-sources-message">No available sources. Enable at least one source in Settings.</h2>
 			<span>Import local JAR files, identify them, and download compatible versions.</span>
 			<div class="toolbar panel">
 				<div class="toolbar-row">
@@ -48,6 +49,8 @@
 		</div>
 		<div id="settings">
 			<h1>Minecraft Mod Updater - Settings</h1>
+			<button id="check-updates">Check for updates</button>
+			<h2>General</h2>
 			<div class="settings-panel panel">
 				<span class="field-label">Target Game Version <span class="select-with-custom">
 						<select id="target-version-select">
@@ -79,6 +82,13 @@
 					</select>
 				</span>
 			</div>
+			<h2>Sources</h2>
+			<div class="settings-panel panel" id="disable-source">
+				<label class="field-label">Ignore Mods by Lyuwenhan <input type="checkbox" id="disable-lyuwenhan"></label>
+				<label class="field-label">Ignore Modrinth <input type="checkbox" id="disable-modrinth"></label>
+				<label class="field-label">Ignore CurseForge <input type="checkbox" id="disable-curseforge"></label>
+			</div>
+			<h2 class="no-sources-message">No available sources. Enable at least one source.</h2>
 		</div>
 		<script src="lib/main.js"></script>
 	</body>

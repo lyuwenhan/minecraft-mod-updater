@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	reloadMods: payload => ipcRenderer.invoke("mods:reload", payload),
 	checkDownloads: payload => ipcRenderer.invoke("mods:check-downloads", payload),
 	getGameVersions: () => ipcRenderer.invoke("modrinth:game-versions"),
+	checkForUpdates: () => ipcRenderer.invoke("updates:check"),
 	chooseAndSaveDownloads: payload => ipcRenderer.invoke("downloads:choose-and-save", payload),
 	exportSummary: payload => ipcRenderer.invoke("summary:export", payload),
 	openExternal: url => ipcRenderer.invoke("shell:open-external", url)
