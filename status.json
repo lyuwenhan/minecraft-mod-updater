@@ -1,4 +1,4 @@
 {
-	"needsUpdate": true,
-	"description": "Fix automatic target refresh behavior for settings changes\nPrevent middle-click from opening mod pages"
+	"needsUpdate": false,
+	"description": ""
 }
