@@ -28,7 +28,7 @@ const MODRINTH_CDN_PREFIX = "https://cdn.modrinth.com/data/";
 const CURSEFORGE_PROXY_BASE = "http://minecraft-mod-updater.lyuwenhan.workers.dev/cf";
 const CURSEFORGE_DOWNLOAD_HOST = "edge.forgecdn.net";
 const LYUWENHAN_EXTENSIONS_BASE = "https://lyuwenhan.github.io/extensions/minecraft-java";
-const LYUWENHAN_EXTENSIONS_DATA_URL = `${LYUWENHAN_EXTENSIONS_BASE}/data/versions.json`;
+const LYUWENHAN_EXTENSIONS_DATA_URL = `${LYUWENHAN_EXTENSIONS_BASE}/data/mappings.json`;
 const LYUWENHAN_EXTENSIONS_DIST_PREFIX = "/extensions/minecraft-java/data/dist/";
 app.setName(APP_NAME);
 const requestCache = new Map;
@@ -359,23 +359,20 @@ async function readJar(filePath) {
 }
 
 function lyuwenhanExtensionsItem(data, sha1) {
-	const sha1Entry = data?.data?.sha1?.[sha1];
+	const sha1Entry = data?.sha1?.[sha1];
 	if (!sha1Entry || typeof sha1Entry.id !== "string" || !sha1Entry.id) {
 		return null
 	}
-	const info = data?.[sha1Entry.id];
+	const info = data?.mods?.[sha1Entry.id];
 	if (!info || typeof info !== "object" || Array.isArray(info)) {
 		return null
 	}
-	const links = info.link && typeof info.link === "object" && !Array.isArray(info.link) ? info.link : {};
 	return {
 		id: sha1Entry.id,
 		version: typeof sha1Entry.version === "string" ? sha1Entry.version : "",
-		versions: Array.isArray(info.versions) ? info.versions.filter(version => typeof version === "string") : [],
 		hasIcon: info.hasIcon === true,
 		displayName: typeof info.displayName === "string" ? info.displayName : "",
 		description: typeof info.description === "string" ? info.description : "",
-		link: links,
 		iconUrl: info.hasIcon === true ? `${LYUWENHAN_EXTENSIONS_BASE}/data/assets/${encodeURIComponent(sha1Entry.id)}/icon.png` : ""
 	}
 }
@@ -610,15 +607,12 @@ async function findLyuwenhanExtensionsDownload(item, preferences, useCache) {
 		return null
 	}
 	const data = await lyuwenhanExtensionsRequest(useCache);
-	if (data?.data?.ext !== "jar") {
-		return null
-	}
-	const version = data?.data?.["newest-version"]?.[id]?.[preferences.gameVersion];
+	const version = data?.mods?.[id]?.versions?.[preferences.gameVersion];
 	if (typeof version !== "string" || !version) {
 		return null
 	}
 	let sha1 = "";
-	for (const [hash, entry] of Object.entries(data?.data?.sha1 || {})) {
+	for (const [hash, entry] of Object.entries(data?.sha1 || {})) {
 		if (entry?.id === id && entry?.version === version) {
 			sha1 = hash;
 			break
