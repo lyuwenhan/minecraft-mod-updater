@@ -350,7 +350,6 @@ async function readJar(filePath) {
 	}
 	const buffer = await fs.readFile(resolved);
 	return {
-		path: resolved,
 		fileName: path.basename(resolved),
 		size: stat.size,
 		sha1: crypto.createHash("sha1").update(buffer).digest("hex"),
@@ -571,6 +570,70 @@ async function enrichFiles(files, useCache, {
 		curseforge: disableCurseForge || lyuwenhanExtensionsByHash.has(file.sha1) ? null : curseForgeByHash.get(file.sha1) || null,
 		lookupErrors
 	}))
+}
+
+function lookupErrorsWithoutPrefix(errors, prefix) {
+	return (Array.isArray(errors) ? errors : []).filter(error => !String(error).startsWith(prefix))
+}
+
+function clearLookupError(items, prefix) {
+	for (const item of items) {
+		item.lookupErrors = lookupErrorsWithoutPrefix(item.lookupErrors, prefix)
+	}
+}
+
+function addLookupError(items, message) {
+	for (const item of items) {
+		item.lookupErrors = [...Array.isArray(item.lookupErrors) ? item.lookupErrors : [], message]
+	}
+}
+async function refreshMissingSources(items, {
+	disableLyuwenhan = false,
+	disableModrinth = false,
+	disableCurseForge = false
+} = {}) {
+	const output = items.map(item => ({
+		...item,
+		lookupErrors: Array.isArray(item.lookupErrors) ? [...item.lookupErrors] : []
+	}));
+	if (!disableLyuwenhan) {
+		const missingLyuwenhan = output.filter(item => !item.lyuwenhanExtensions);
+		if (missingLyuwenhan.length) {
+			clearLookupError(missingLyuwenhan, "Lyuwenhan Extensions:");
+			try {
+				const matches = await lookupLyuwenhanExtensionsBatch(missingLyuwenhan, false);
+				for (const item of missingLyuwenhan) {
+					item.lyuwenhanExtensions = matches.get(item.sha1) || null
+				}
+			} catch (error) {
+				addLookupError(missingLyuwenhan, `Lyuwenhan Extensions: ${error.message}`)
+			}
+		}
+	}
+	const fallbackItems = output.filter(item => !item.lyuwenhanExtensions);
+	const missingModrinth = disableModrinth ? [] : fallbackItems.filter(item => !item.modrinth);
+	const missingCurseForge = disableCurseForge ? [] : fallbackItems.filter(item => !item.curseforge);
+	clearLookupError(missingModrinth, "Modrinth:");
+	clearLookupError(missingCurseForge, "CurseForge:");
+	const [modrinthResult, curseForgeResult] = await Promise.allSettled([missingModrinth.length ? lookupModrinthBatch(missingModrinth, false) : Promise.resolve(new Map), missingCurseForge.length ? lookupCurseForgeBatch(missingCurseForge, false) : Promise.resolve(new Map)]);
+	if (modrinthResult.status === "fulfilled") {
+		for (const item of missingModrinth) {
+			item.modrinth = modrinthResult.value.get(item.sha1) || null
+		}
+	} else {
+		if (modrinthResult.reason?.tooManyRequests) {
+			throw modrinthResult.reason
+		}
+		addLookupError(missingModrinth, `Modrinth: ${modrinthResult.reason.message}`)
+	}
+	if (curseForgeResult.status === "fulfilled") {
+		for (const item of missingCurseForge) {
+			item.curseforge = curseForgeResult.value.get(item.sha1) || null
+		}
+	} else {
+		addLookupError(missingCurseForge, `CurseForge: ${curseForgeResult.reason.message}`)
+	}
+	return output
 }
 
 function acceptableRelease(type, minimum) {
@@ -1185,24 +1248,14 @@ app.whenReady().then(() => {
 		disabledSources = {}
 	}) => {
 		resetModrinthRequestBlock();
-		const jarPaths = await existingJarPaths(items.map(item => item.path));
-		const files = await Promise.all(jarPaths.map(filePath => readJar(filePath)));
-		return enrichFiles(files, false, disabledSources)
+		return refreshMissingSources(items, disabledSources)
 	});
 	ipcMain.handle("mods:refresh-sources", async (_event, {
 		items,
 		disabledSources = {}
 	}) => {
 		resetModrinthRequestBlock();
-		const existingPaths = new Set(await existingJarPaths(items.map(item => item.path)));
-		const files = items.filter(item => existingPaths.has(item.path)).map(item => ({
-			path: item.path,
-			fileName: item.fileName,
-			size: item.size,
-			sha1: item.sha1,
-			curseForgeFingerprint: item.curseForgeFingerprint
-		}));
-		return enrichFiles(files, true, disabledSources)
+		return refreshMissingSources(items, disabledSources)
 	});
 	ipcMain.handle("mods:check-downloads", async (_event, {
 		items,
