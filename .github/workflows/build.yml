@@ -449,17 +449,23 @@ jobs:
       - name: Reset status.json
         run: node scripts/ci-reset-status.mjs
 
-      - name: Commit and push status.json
+      - name: Update package lock
+        run: npm install --package-lock-only
+
+      - name: Reset changelog.md
+        run: : > changelog.md
+
+      - name: Commit and push reset changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add status.json
+          git add -A
 
           if git diff --staged --quiet; then
-            echo "status.json unchanged."
+            echo "No reset changes."
             exit 0
           fi
 
-          git commit -m "chore: reset status.json"
+          git commit -m "chore: reset release status"
           git push
