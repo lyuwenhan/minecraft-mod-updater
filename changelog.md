@@ -1,0 +1,2 @@
+- Fixed a target version race condition.
+- Hide titles for unavailable target icons.
