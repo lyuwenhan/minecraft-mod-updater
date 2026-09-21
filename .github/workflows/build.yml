@@ -453,7 +453,7 @@ jobs:
         run: npm install --package-lock-only
 
       - name: Reset changelog.md
-        run: echo > changelog.md
+        run: echo -n > changelog.md
 
       - name: Commit and push reset changes
         run: |
