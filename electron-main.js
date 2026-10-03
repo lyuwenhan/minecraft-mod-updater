@@ -28,8 +28,8 @@ const MODRINTH_CDN_PREFIX = "https://cdn.modrinth.com/data/";
 const CURSEFORGE_PROXY_BASE = "http://minecraft-mod-updater.lyuwenhan.workers.dev/cf";
 const CURSEFORGE_DOWNLOAD_HOST = "edge.forgecdn.net";
 const LYUWENHAN_EXTENSIONS_BASE = "https://lyuwenhan.github.io/extensions/minecraft-java";
-const LYUWENHAN_EXTENSIONS_DATA_URL = `${LYUWENHAN_EXTENSIONS_BASE}/data/mappings.json`;
-const LYUWENHAN_EXTENSIONS_DIST_PREFIX = "/extensions/minecraft-java/data/dist/";
+const LYUWENHAN_EXTENSIONS_DATA_URL = `${LYUWENHAN_EXTENSIONS_BASE}/mappings.json`;
+const LYUWENHAN_EXTENSIONS_DIST_PREFIX = "/extensions/minecraft-java/dist/";
 app.setName(APP_NAME);
 const requestCache = new Map;
 let requestCacheLastOperation = Date.now();
@@ -372,7 +372,7 @@ function lyuwenhanExtensionsItem(data, sha1) {
 		hasIcon: info.hasIcon === true,
 		displayName: typeof info.displayName === "string" ? info.displayName : "",
 		description: typeof info.description === "string" ? info.description : "",
-		iconUrl: info.hasIcon === true ? `${LYUWENHAN_EXTENSIONS_BASE}/data/assets/${encodeURIComponent(sha1Entry.id)}/icon.png` : ""
+		iconUrl: info.hasIcon === true ? `${LYUWENHAN_EXTENSIONS_BASE}/${encodeURIComponent(sha1Entry.id)}/icon.png` : ""
 	}
 }
 async function lookupLyuwenhanExtensionsBatch(files, useCache) {
@@ -688,7 +688,7 @@ async function findLyuwenhanExtensionsDownload(item, preferences, useCache) {
 		gameVersion: preferences.gameVersion,
 		loader: preferences.loader,
 		fileName: `${id}-${version}.jar`,
-		url: `${LYUWENHAN_EXTENSIONS_BASE}/data/dist/${encodeURIComponent(id)}-${encodeURIComponent(version)}.jar`,
+		url: `${LYUWENHAN_EXTENSIONS_BASE}/dist/${encodeURIComponent(id)}-${encodeURIComponent(version)}.jar`,
 		sha1,
 		sha512: "",
 		versionName: version
